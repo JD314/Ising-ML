@@ -1,0 +1,20 @@
+model:
+  architecture: UNetIsing
+  n_channels: 2
+  out_channels: 1
+  encoder_channels:
+  - 64
+  - 128
+  - 256
+  - 512
+  decoder_channels:
+  - 256
+  - 128
+  - 64
+training:
+  optimizer: Adam
+  lr: 0.001
+  loss: BCEWithLogitsLoss
+experiment:
+  name: unet_ising
+  save_dir: ./experiments/unet_ising
