@@ -3,6 +3,24 @@ data/
 *.txt
 *.png
 
+# Results and generated images
+img_results/
+experiments/
+
+# Comparison experiments folder
+comparison_experiments/
+
+
+# Modelos guardados
+*.pt
+*.pth
+*.pkl
+*.h5
+*.hdf5
+*.hdf
+*.h5py
+
+
 # Prerequisites
 *.d
 
