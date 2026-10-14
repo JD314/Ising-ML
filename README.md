@@ -1,212 +1,79 @@
-# Aprendizaje Automático en el Modelo de Ising 2D
+# Information Geometry & Fisher Schur Invariants in the 2D Ising Model
 
-Este proyecto implementa métodos de aprendizaje automático para el análisis y clasificación de fases en el modelo de Ising bidimensional. El trabajo combina simulaciones Monte Carlo con redes neuronales profundas para identificar transiciones de fase y reconstruir configuraciones de espines.
+This repository investigates **parameter-space and physical Fisher information geometry** in neural networks (discriminative classifiers and autoregressive generative models) trained across the second-order phase transition of the classical 2D ferromagnetic Ising model ($T_c = \frac{2}{\ln(1+\sqrt{2})} \approx 2.269$).
 
-## Descripción del Proyecto
+---
 
-El modelo de Ising es un modelo fundamental en física estadística que describe sistemas magnéticos mediante una red de espines que pueden tomar valores +Reconstrucción de configuraciones (inpainting)
+## Repository Structure
 
-Se propone reformular el problema desde una tarea de clasificación de fases, en la que se asigna una etiqueta global a cada configuración del sistema, hacia una tarea de reconstrucción parcial (inpainting o imputación). En este enfoque, se oculta de manera controlada un pequeño porcentaje de los espines de cada configuración (por ejemplo, un 5%) y se entrena un modelo para predecir los valores de los espines ocultos a partir del resto de la configuración observada.
+    Ising_ML/
+    ├── ising_fisher/                  # Stage 1 Fisher Schur Invariant package
+    │   ├── mc.py                      # Numba-accelerated 2D Ising Metropolis sampler (in sweeps)
+    │   ├── observables.py             # Exact L<=4 enumeration & physical Fisher F(T, h)
+    │   ├── dataset.py                 # HDF5 dataset I/O with chain-grouped train/eval splits
+    │   ├── fisher.py                  # Per-sample scores (vmap), Schur invariant r_c, S_c, and r_f
+    │   ├── train.py                   # Classifier (BCE) and Generator (Forward KL) training loops
+    │   └── models/
+    │       ├── classifier.py          # Lightweight SimpleMLP & circular-padded SimpleCNN
+    │       └── gen_cnn.py             # MaskedConv2d & Z2-equivariant autoregressive SimpleGenCNN
+    ├── scripts/
+    │   ├── generate_mc.py             # CLI generator for multi-chain MC HDF5 datasets
+    │   └── run_first_exploration.py   # End-to-end Stage 1 pipeline & figure generator
+    ├── tests/                         # 44 unit tests (MC, normalization, Z2, Identities a-d)
+    ├── img_results/
+    │   ├── first_exploration.png      # Stage 1 exploration summary plot (L=8)
+    │   └── first_exploration.json     # Numerical results from Stage 1 exploration
+    ├── CONTEXT_ISING_ML.md            # Technical specification and code audit documentation
+    └── legacy_baseline/               # Original baseline notebooks (MLP, AlexNet CNN, U-Net)
+        ├── Ising_generator.ipynb
+        ├── Distribuciones.ipynb
+        ├── utils.py
+        ├── models/
+        └── README_legacy.md
 
-Este procedimiento permite evaluar en qué medida el modelo ha capturado las correlaciones espaciales intrínsecas del sistema de Ising, ya que la reconstrucción correcta de los espines faltantes depende directamente del conocimiento implícito de dichas correlaciones. En particular, la dificultad de la tarea de reconstrucción, cuantificada mediante métricas de error adecuadas, puede utilizarse como un indicador sensible de las propiedades físicas del sistema, incluyendo cambios estructurales asociados a transiciones de fase.1 o -1. En dos dimensiones, el modelo presenta una transición de fase de segundo orden a una temperatura crítica T_c ≈ 2.269, separando una fase ordenada (T < T_c) de una fase desordenada (T > T_c).
+---
 
-Este proyecto aborda tres tareas principales:
+## Theoretical Framework (`ising_fisher/`)
 
-1. **Generación de datos**: Implementación del algoritmo de Metropolis-Hastings para generar configuraciones de equilibrio del modelo de Ising a diferentes temperaturas.
-2. **Clasificación de fases**: Entrenamiento de redes neuronales para clasificar automáticamente las configuraciones en fase ordenada o desordenada.
-3. **Reconstrucción de espines**: Implementación de una arquitectura U-Net para reconstruir configuraciones parcialmente ocultas (inpainting), permitiendo medir correlaciones aprendidas por el modelo.
+### 1. Physical Fisher Information
+For the 2D Ising Hamiltonian $\mathcal{H} = -J \sum_{\langle i,j \rangle} s_i s_j - h \sum_i s_i$ with interaction energy $E_J = -J \sum_{\langle i,j \rangle} s_i s_j$ and magnetization $M = \sum_i s_i$, the physical Fisher information matrix in control space $c \in \{T, h\}$ is:
 
-## Estructura del Proyecto
+$$F_{TT} = \frac{\operatorname{Var}(E_J - hM)}{T^4}, \qquad F_{hh} = \frac{\operatorname{Var}(M)}{T^2}, \qquad F_{Th} = \frac{\operatorname{Cov}(E_J - hM, M)}{T^3}$$
 
-```
-proyecto_final/
-├── data/
-├── models/
-│   ├── CNN_classification.ipynb
-│   ├── CNN_spin_reconstruction.ipynb
-│   ├── NN_classification.ipynb
-│   └── experiments/
-├── Ising_generator.ipynb
-├── Distribuciones.ipynb
-├── utils.py
-└── README.md
-```
+### 2. The Parameter–Physical Schur Invariant ($r_c, S_c$)
+For a conditional generative model $q_\theta(x \mid c)$ with exact log-likelihood, we evaluate the parameter score $u_\theta(x) = \nabla_\theta \log q_\theta(x \mid c)$ and control score $u_c(x) = \partial_c \log q_\theta(x \mid c)$ on model samples $x \sim q_\theta(\cdot \mid c)$:
 
-## Generación de Datos (Ising_generator.ipynb)
+$$F_\theta = \mathbb{E}_q[u_\theta u_\theta^\top], \qquad G_c = \mathbb{E}_q[u_\theta u_c], \qquad F_{cc}^{\text{model}} = \mathbb{E}_q[u_c^2]$$
 
-### Algoritmo de Metropolis-Hastings
+The **Schur invariant** $r_c \in [0, 1]$ and **Schur residual** $S_c$ are defined as:
 
-El generador implementa el algoritmo de Metropolis-Hastings para muestrear configuraciones del ensamble canónico:
+$$r_c = \frac{G_c^\top F_\theta^+ G_c}{F_{cc}^{\text{model}}}, \qquad S_c = F_{cc}^{\text{model}}(1 - r_c)$$
 
-1. **Inicialización**: Red cuadrada L×L con espines aleatorios (±1)
-2. **Simulated Annealing**: Barrido de temperatura desde T=5 hasta la temperatura objetivo para evitar mínimos locales
-3. **Burn-in (Termalización)**: Ejecución de pasos Monte Carlo sin guardar datos para alcanzar equilibrio térmico
-4. **Muestreo**: Guardado de configuraciones espaciadas en el tiempo para reducir correlaciones
+* **Invariance:** $r_c$ is strictly invariant under invertible weight reparametrizations ($\theta \to \phi(\theta)$) and control-parameter chart transformations ($T \leftrightarrow \beta$).
+* **Exact Structural Identities Verified in `tests/test_fisher.py`:**
+  * **(a) Reparametrization Invariance:** $u_\theta \to A u_\theta$ leaves $r_c$ invariant to machine precision ($< 10^{-10}$).
+  * **(b) Classifier Vanishing:** For discriminative classifiers $p_\theta(y \mid x)$ with model-sampled labels $y \sim p_\theta(y \mid x)$, $G_T \equiv 0$ and $r_T \equiv 0$.
+  * **(c) $\mathbb{Z}_2$-Equivariant Vanishing:** For $q_\theta(-x \mid -h) = q_\theta(x \mid h)$ evaluated at $h = 0$, $r_h \equiv 0$ and $F_{Th}^{\text{model}} \equiv 0$.
+  * **(d) Function-Space Classifier Invariant $r_f(T)$:** Held-out $R^2$ of regressing the physical thermal score $s_T = (E_J - \langle E_J \rangle)/T^2$ onto classifier logit gradients $\nabla_\theta f(x)$.
 
-### Formato de Almacenamiento: HDF5 (H5)
+---
 
-En el proyecto se optó por almacenar los datos en disco usando el formato HDF5 (h5) y cargarlos de manera incremental por batches durante el entrenamiento, en lugar de mantener todo el conjunto de datos en memoria RAM. Esta decisión se fundamenta en varias razones técnicas y prácticas:
+## Stage 1 Exploration Results ($L = 8, h = 0$)
 
-#### 1. Tamaño del Conjunto de Datos
+![Stage 1 Exploration](img_results/first_exploration.png)
 
-Las configuraciones del modelo de Ising consisten en arreglos bidimensionales de espines, y el número total de muestras crece rápidamente al considerar múltiples temperaturas, diferentes realizaciones independientes (Monte Carlo), y posibles promedios o réplicas. Cargar el dataset completo en memoria no escala bien y puede exceder fácilmente la capacidad de RAM disponible, especialmente durante el entrenamiento de redes neuronales. El uso de HDF5 permite manejar datasets grandes sin requerir que estén completamente en memoria.
+* **Classifier $r_f(T)$:** `SimpleCNN` spans $>96.6\%$ of the physical thermal score variance across the entire temperature grid and peaks at $T \approx T_c$ with $r_f^{\text{heldout}} = 0.9908$ using an effective Fisher rank of only 18.
+* **Generative Schur Deficit $1 - r_T(T)$ & Residual $S_T(T)$:** Restricting to spin-interaction weights removes trivial conditioning/bias redundancies and reveals a sharp critical maximum in the uncaptured Fisher information $S_T$ across $T_c$.
 
-#### 2. Eficiencia de I/O y Acceso Parcial
+---
 
-El formato HDF5 está diseñado para acceso eficiente a subconjuntos de datos, lo cual es ideal para lectura por índices, slicing por rangos, y acceso directo a batches consecutivos o aleatorios. Esto hace que la carga de datos por batches sea rápida y estable, minimizando el cuello de botella de entrada/salida (I/O) durante el entrenamiento.
+## Quickstart
 
-#### 3. Compatibilidad Natural con el Entrenamiento por Mini-batches
+    # 1. Activate virtual environment
+    source .venv/bin/activate
 
-El entrenamiento de redes neuronales se realiza típicamente mediante mini-batch gradient descent, por lo que no es necesario tener todos los datos simultáneamente en memoria; basta con disponer de un batch a la vez. Cargar los datos en batches desde disco reduce el uso de memoria, mantiene constante el consumo de recursos, y permite entrenar modelos más grandes o usar datasets más extensos.
+    # 2. Run the full validation suite (44 unit tests)
+    python -m pytest -v
 
-#### 4. Separación entre Generación de Datos y Entrenamiento
-
-En el modelo de Ising, la generación de configuraciones (simulación Monte Carlo) es computacionalmente costosa y conceptualmente distinta del entrenamiento del modelo de ML. Al guardar las configuraciones en archivos HDF5, la simulación se realiza una sola vez, los datos pueden reutilizarse múltiples veces, y se facilita la reproducibilidad del experimento. Esto permite iterar sobre la arquitectura o los hiperparámetros del modelo sin volver a simular el sistema físico.
-
-#### 5. Escalabilidad y Reproducibilidad
-
-Este enfoque permite escalar el número de muestras sin cambiar la lógica del entrenamiento, entrenar en máquinas con distinta capacidad de memoria, y mantener un formato de datos estructurado y documentado (grupos, metadatos, etiquetas). Además, HDF5 facilita almacenar temperaturas, magnetización, energía, y etiquetas de fase junto con las configuraciones de espines.
-
-#### 6. Práctica Estándar en Proyectos Científicos y de ML
-
-El uso de almacenamiento en disco con carga por batches es una práctica estándar en simulaciones numéricas, física computacional, y aprendizaje automático con datasets grandes. Por tanto, esta elección no solo es pragmática, sino también alineada con buenas prácticas profesionales.
-
-### Estructura de Archivos Generados
-
-Cada archivo de datos contiene:
-
-- **Header (primera línea)**: Metadatos en formato JSON con parámetros de simulación:
-  ```json
-  {"L": 10, "T": 2.3, "N": 5000, "class": 1, "burn_in": 2000, "interval": 100, "seed": 42, "H": 0, "J": 1}
-  ```
-- **Configuraciones**: Cada línea subsiguiente contiene un microestado plano (valores separados por comas)
-
-El nombre del archivo sigue el patrón: `ising_L{L}_T{T:.3f}_{label}.txt`, donde `label` es 0 para fase ordenada y 1 para fase desordenada.
-
-## Modelos Implementados
-
-### 1. Red Neuronal Fully Connected (NN_classification.ipynb)
-
-Arquitectura de red neuronal densa para clasificación binaria de fases:
-
-- **Arquitectura**: Secuencia de capas fully connected con activaciones ReLU
-- **Topología**: Input → 100 → 100 → 200 → 100 → 50 → 1
-- **Función de pérdida**: Binary Cross-Entropy with Logits Loss
-- **Optimizador**: Adam con learning rate 1e-3
-- **Aplicación**: Clasificación de configuraciones en fase ordenada (0) o desordenada (1)
-
-### 2. Red Neuronal Convolucional (CNN_classification.ipynb)
-
-Arquitectura CNN basada en AlexNet adaptada para configuraciones de Ising:
-
-- **Arquitectura**: 
-  - Capas convolucionales: Conv2d(1→32→64→128) con MaxPooling
-  - Capas fully connected: 512 → 256 → 128 → 1
-  - Dropout (0.5) para regularización
-- **Función de pérdida**: Binary Cross-Entropy with Logits Loss
-- **Optimizador**: Adam con learning rate 1e-3
-- **Ventaja**: Captura patrones espaciales locales y correlaciones entre espines vecinos
-
-### 3. U-Net para Reconstrucción de Espines (CNN_spin_reconstruction.ipynb)
-
-Arquitectura U-Net para tarea de inpainting/reconstrucción:
-
-- **Arquitectura**: 
-  - Encoder: Bloques DoubleConv con MaxPooling (64→128→256→512 canales)
-  - Decoder: Bloques Up con concatenación skip connections (512→256→128→64)
-  - Entrada: 2 canales (estado enmascarado + máscara)
-  - Salida: 1 canal (probabilidad de spin up)
-- **Función de pérdida**: Binary Cross-Entropy with Logits Loss (aplicada solo sobre píxeles enmascarados)
-- **Optimizador**: Adam con learning rate 1e-3
-- **Aplicación**: Reconstrucción de 5% de espines ocultos aleatoriamente
-- **Métrica de interés**: Masked Negative Log-Likelihood (NLL) como función de la temperatura, mostrando pico cerca de T_c
-
-## Utilidades (utils.py)
-
-El módulo `utils.py` proporciona las siguientes clases y funcionalidades:
-
-- **`read_ising_file`**: Clase para leer y procesar archivos de datos del modelo Ising, incluyendo métodos para visualización, cálculo de energía y magnetización.
-- **`ising_data_builder`**: Construye datasets en formato HDF5 a partir de archivos de texto, soportando dos modos:
-  - `kind='classification'`: Genera dataset con etiquetas de fase
-  - `kind='inpainting'`: Genera dataset para tarea de reconstrucción
-- **`H5IsingDataset`**: Dataset de PyTorch que permite cargar datos desde archivos HDF5 de manera eficiente, compatible con DataLoader para entrenamiento por batches.
-
-## Análisis de Distribuciones (Distribuciones.ipynb)
-
-Este notebook analiza las propiedades estadísticas del modelo de Ising:
-
-- **Distribuciones de energía**: Histogramas de energía para diferentes temperaturas
-- **Distribuciones de magnetización**: Histogramas de magnetización para diferentes temperaturas
-- **Magnetización promedio vs temperatura**: Curva que muestra la transición de fase
-
-## Requisitos
-
-Las principales dependencias del proyecto incluyen:
-
-- Python 3.x
-- NumPy
-- PyTorch
-- Matplotlib
-- Seaborn
-- scikit-learn
-- h5py
-- tqdm
-- Numba (para optimización del generador)
-
-## Uso
-
-### Generación de Datos
-
-```python
-from Ising_generator import Ising_2D
-import numpy as np
-
-ising = Ising_2D()
-T = np.arange(0.1, 4.1, 0.1)
-
-for t in T:
-    ising.generate_samples(
-        L=10, 
-        T=t, 
-        samples=2000, 
-        burn_in=5000, 
-        interval=500, 
-        seed=73, 
-        H=0, 
-        J=1, 
-        folder='./data/data_10/'
-    )
-```
-
-### Construcción del Dataset HDF5
-
-```python
-from utils import ising_data_builder, H5IsingDataset
-
-# Para clasificación
-data = ising_data_builder('./data/data_10/', kind='classification').h5_path
-dataset = H5IsingDataset(data)
-
-# Para inpainting
-data = ising_data_builder('./data/data_30/', kind='inpainting').h5_path
-dataset = H5IsingDataset(data)
-```
-
-### Entrenamiento de Modelos
-
-Los notebooks en la carpeta `models/` contienen el código completo para entrenar cada modelo. Cada notebook incluye:
-
-- Construcción y división del dataset (train/test)
-- Definición de la arquitectura del modelo
-- Loop de entrenamiento con métricas
-- Evaluación y visualización de resultados
-
-## Resultados
-
-Los modelos implementados permiten:
-
-1. **Clasificación precisa de fases**: Las redes neuronales logran alta precisión en la clasificación de configuraciones, con accuracy que varía según la temperatura, mostrando mayor dificultad cerca de la temperatura crítica T_c.
-
-2. **Detección de transición de fase mediante inpainting**: El modelo U-Net muestra un pico en la Masked NLL cerca de T_c, indicando que la dificultad de reconstrucción aumenta en la región crítica, donde las correlaciones son más complejas.
-
-3. **Análisis de propiedades físicas**: Las distribuciones de energía y magnetización revelan el comportamiento característico del modelo de Ising en diferentes regímenes de temperatura.
+    # 3. Run the Stage 1 exploration pipeline
+    python scripts/run_first_exploration.py --L 8 --nT 8

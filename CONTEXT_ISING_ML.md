@@ -2,6 +2,8 @@
 
 > **Repository**: `JD314/Ising-ML`
 > **Generated**: 2026-09-30 — file-by-file inspection of all source code, notebooks, model checkpoints, and documentation.
+>
+> **Audit update (2026-10-13)**: corrected the flip-energy sign (§2.1, App. A), the step-vs-sweep units (§2.3), parameter counts (§3.2, §3.4.2, §5.4), and the `H5IsingDataset` dtype / `invert=True` leakage notes (§2.4, §4.2.3); appended the Stage 1 specification (§6). Corrections are marked **[AUDIT]**.
 
 ---
 
@@ -128,10 +130,16 @@ The core sampler is a standard **Metropolis-Hastings** single-spin-flip algorith
 2. Compute the **local energy change** if the spin were flipped:
 
 $$
-\Delta E = -2\,S_{i,j}\left(-J\sum_{\text{nn}} S_{\text{nn}} + H\right) \cdot (-2) = -2 \times \text{energy}(S, i, j)
+\Delta E_{\text{correct}} = 2J\,S_{i,j}\sum_{\text{nn}} S_{\text{nn}} + 2H\,S_{i,j}
 $$
 
-In the code the local energy function returns $e_{ij} = -J\,S_{i,j}\sum_{\text{nn}} S_{\text{nn}} + H\,S_{i,j}$, and the flip change is computed as `Delta_E = -2.0 * self.energy(self.spin, i, j)`.
+In the code the local energy function returns $e_{ij} = -J\,S_{i,j}\sum_{\text{nn}} S_{\text{nn}} + H\,S_{i,j}$, and the flip change is computed as `Delta_E = -2.0 * self.energy(self.spin, i, j)`, i.e. the legacy code effectively uses
+
+$$
+\Delta E_{\text{legacy}} = 2J\,S_{i,j}\sum_{\text{nn}} S_{\text{nn}} - 2H\,S_{i,j}.
+$$
+
+> **[AUDIT] Sign bug in the field term.** For $\mathcal{H} = -J\sum_{\langle i,j\rangle} S_iS_j - H\sum_i S_i$, flipping $S_{ij} \to -S_{ij}$ changes the field energy by $+2H\,S_{ij}$ (not $-2H\,S_{ij}$). The legacy local energy $e_{ij}$ carries $+H S_{ij}$ instead of $-H S_{ij}$, so the sampler is wrong for $H \neq 0$ (it samples $H \to -H$ relative to the Hamiltonian in §1.1 and in `utils.py`). All generated data used $H = 0$, so the existing datasets are **unaffected**; any $H \neq 0$ simulation (Stage 1) must use the corrected $\Delta E$.
 
 3. **Accept or reject**:
    - If $\Delta E \le 0$: accept (flip the spin).
@@ -156,13 +164,15 @@ The method `Ising_2D.generate_samples(L, T, samples, burn_in, interval, seed, H,
 |-----------|-------------------------------|---------------------------|
 | Lattice size $L$ | 10 | 30 |
 | Number of samples per $T$ | 2 000 | 2 000 |
-| Burn-in sweeps | 5 000 single-spin steps | 5 000 single-spin steps |
-| Sampling interval | 500 single-spin steps | 500 single-spin steps |
+| Burn-in (`burn_in=5000`) | 5 000 single-spin steps (= 50 sweeps) | 5 000 single-spin steps (≈ 5.6 sweeps) |
+| Sampling interval (`interval=500`) | 500 single-spin steps (= 5 sweeps) | 500 single-spin steps (≈ 0.56 sweeps) |
 | Random seed | 73 | 73 |
 | $H$ | 0 | 0 |
 | $J$ | 1 | 1 |
 | Temperature grid | `np.arange(0.1, 4.1, 0.1)` → 40 temperatures | `np.arange(0.1, 4.1, 0.1)` → 40 temperatures |
 | Annealing range | $[T, 5.0]$ in steps of $0.05$, 100 MC steps each | Same |
+
+> **[AUDIT] Steps are not sweeps.** In the legacy code `burn_in=5000` and `interval=500` count **single-spin Metropolis steps**, NOT sweeps. One sweep $= L^2$ single-spin flip attempts ($100$ for $L=10$, $900$ for $L=30$). Hence for $L=30$ the sampling interval is only $\approx 0.56$ sweeps, so consecutive samples are strongly autocorrelated (especially near $T_c$, where critical slowing down applies); the burn-in is also short ($\approx 5.6$ sweeps), partially compensated by the annealing stage. Effective sample sizes are therefore well below the nominal 2 000 per temperature. Stage 1 specifications must express burn-in and interval **in sweeps**.
 
 ### 2.4 Spin Configuration Encoding and Storage
 
@@ -196,10 +206,12 @@ Built by `ising_data_builder`. Two modes:
 
 | Mode | HDF5 datasets | Shapes | Semantics |
 |------|--------------|--------|-----------|
-| `classification` | `X` : spins, `y` : labels | `X`: $(N_{\text{total}}, L, L)$ int, `y`: $(N_{\text{total}},)$ float | $X \in \{-1,+1\}$, $y \in \{0, 1\}$ (phase label) |
+| `classification` | `X` : spins, `y` : labels | `X`: $(N_{\text{total}}, L, L)$ int, `y`: $(N_{\text{total}},)$ (stored as float; **returned as `torch.long` by `H5IsingDataset.__getitem__`**, see §4.2.3) | $X \in \{-1,+1\}$, $y \in \{0, 1\}$ (phase label) |
 | `inpainting` | `X` : spins, `y` : probabilities | `X`: $(N_{\text{total}}, L, L)$ int, `y`: $(N_{\text{total}}, L, L)$ float | $X \in \{-1,+1\}$, $y = (X+1)/2 \in \{0, 1\}$ |
 
 The dataset includes **spin-inverted copies** by default (`invert=True` in `load_all_spins`): for every configuration $\mathbf{S}$, the negated $-\mathbf{S}$ is also added, effectively doubling the dataset and enforcing the $\mathbb{Z}_2$ symmetry of the Ising model at $H = 0$.
+
+> **[AUDIT] `invert=True` leaks and destroys the odd channel.** The inversion is applied **before** the train/test split, and the split is random over individual samples. A configuration $\mathbf{S}$ can land in the training set while its copy $-\mathbf{S}$ lands in the test set (same label, trivially related input), causing **train/test data leakage** and over-optimistic test metrics. Moreover, because every $\mathbf{S}$ appears together with $-\mathbf{S}$ under an identical label, the **odd (magnetisation / $h$-conjugate) component** of the input carries no label information and any dependence on it is washed out: models trained this way cannot represent or probe the $h$-sensitivity (the odd channel is effectively killed). For Stage 1, use `invert=False` (or split by original configuration before augmenting).
 
 **Total dataset size** (with inversion): $40\;\text{temperatures} \times 2000\;\text{samples} \times 2\;\text{(inversion)} = 160\,000$ configurations.
 
@@ -234,7 +246,7 @@ Input (L²) → Flatten → Linear(L², 100) → ReLU
 | Hidden layers | 5 (widths: 100, 100, 200, 100, 50) |
 | Activation | ReLU (all hidden layers) |
 | Output activation | None (raw logit; sigmoid applied externally) |
-| Total parameters | ~42 651 (estimated) |
+| Total parameters | **65 601** (exact: 10 100 + 10 100 + 20 200 + 20 100 + 5 050 + 51) — **[AUDIT]** earlier text said ~42 651, which was wrong |
 | Loss function | `nn.BCEWithLogitsLoss` |
 | Optimiser | Adam, $\text{lr} = 10^{-3}$ |
 | Batch size | 64 |
@@ -323,7 +335,7 @@ For $L = 30$: spatial dimensions are $30 \to 15 \to 7 \to 3$ (encoder) and $3 \t
 | Normalisation | `BatchNorm2d` after every `Conv2d` |
 | Activation | `ReLU(inplace=True)` |
 | Upsampling | `ConvTranspose2d` (learnt, stride 2) |
-| Total parameters | ~23 million (checkpoint files are ~89 MB each) |
+| Total parameters | **7 702 401** — **[AUDIT]** earlier text said ~23 M, which was wrong. The ~89 MB checkpoint files are larger than the weights alone (≈ 31 MB in fp32) because they also store the Adam optimiser state (two moment buffers per parameter) plus BatchNorm buffers |
 
 #### 3.4.3 Masking Protocol
 
@@ -499,7 +511,7 @@ PyTorch-compatible dataset for lazy-loading from HDF5.
 |--------|-----------|---------|-------------|
 | `__init__` | `(self, h5_path: str)` | — | Opens HDF5, stores handles to `X` and `y` datasets |
 | `__len__` | `(self)` → `int` | $N$ | Number of samples |
-| `__getitem__` | `(self, idx)` → `(Tensor, Tensor)` | $(x, y)$ | Returns `x` as `float32`, `y` as `long` tensors. Reads single sample from HDF5 on demand |
+| `__getitem__` | `(self, idx)` → `(Tensor, Tensor)` | $(x, y)$ | Returns `x` as `float32`, `y` as `torch.long` tensors (**[AUDIT]** `y` is **not** `float`; losses such as `BCEWithLogitsLoss` require `y.float()`, so callers must cast explicitly). Reads single sample from HDF5 on demand |
 | `close` | `(self)` | — | Explicitly closes the HDF5 file handle |
 | `__del__` | `(self)` | — | Auto-closes on garbage collection |
 
@@ -607,7 +619,7 @@ All model notebooks use:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ```
 
-The U-Net with ~23M parameters benefits significantly from GPU acceleration; classification models are lightweight enough for CPU.
+The U-Net with ~7.7M parameters (7 702 401; **[AUDIT]** not ~23M) benefits significantly from GPU acceleration; classification models are lightweight enough for CPU.
 
 ### 5.5 `.gitignore` Notes
 
@@ -627,7 +639,7 @@ The following are git-ignored and must be regenerated locally:
 |----------|---------|---------------|
 | Hamiltonian | $\mathcal{H} = -J\sum_{\langle i,j\rangle} S_i S_j - H\sum_i S_i$ | `Ising_2D.energy`, `read_ising_file.calculate_energy` |
 | Critical temperature | $T_c = \frac{2}{\ln(1+\sqrt{2})} \approx 2.269$ | `Ising_2D.__init__` |
-| Local energy change | $\Delta E = 2J\,S_{ij}\sum_{\text{nn}} S_{\text{nn}} - 2H\,S_{ij}$ | `Ising_2D.metropolis_hasting` |
+| Local energy change (physically correct) | $\Delta E = 2J\,S_{ij}\sum_{\text{nn}} S_{\text{nn}} + 2H\,S_{ij}$ | — (**[AUDIT]** legacy `Ising_2D.metropolis_hasting` implements $\ldots - 2H\,S_{ij}$, a sign bug in the field term; harmless at $H=0$) |
 | Acceptance probability | $P_{\text{accept}} = \min\!\left(1,\; e^{-\Delta E / T}\right)$ | `Ising_2D.metropolis_hasting` |
 | Spin → probability map | $p = (S + 1)/2$ | `ising_data_builder._build_inpainting_dataset` |
 | Masked NLL | $\frac{1}{|\mathcal{M}|}\sum_{(i,j)\in\mathcal{M}} \text{BCE}(\hat{y}_{ij}, y_{ij})$ | `CNN_spin_reconstruction.ipynb`, Cell 9/11 |
@@ -717,3 +729,74 @@ The following are git-ignored and must be regenerated locally:
 | 12 | Code | Plot Masked NLL vs $T$ with $T_c$ vertical line |
 | 13 | Markdown | Section: save model |
 | 14 | Code | `torch.save` checkpoint + YAML config |
+
+---
+
+## 6. Stage 1 Specification: Fisher Schur Invariant (`ising_fisher/`)
+
+Stage 1 compares the **physical Fisher information** of the Ising ensemble in the parameters $c \in \{T, h\}$ against the information that a **parametrised model** with weights $\theta$ carries about $c$, via a Schur-complement invariant. Notation: the external field is $h$ (the $H$ of §1.1); $s_i = S_i \in \{-1,+1\}$; $\beta = 1/T$ with $k_B = 1$.
+
+> **Prerequisites.** (i) Use the corrected $\Delta E = 2J S_{ij}\sum_{\text{nn}} S_{\text{nn}} + 2h S_{ij}$ (§2.1) for every $h \neq 0$ simulation. (ii) Express burn-in and sampling interval in **sweeps** ($1\text{ sweep} = L^2$ flips, §2.3). (iii) Use `invert=False` / split-before-augment (§2.4).
+
+### 6.1 Physical Fisher Information (Monte Carlo)
+
+Separate the energy into its coupling part and the field part:
+
+$$
+E_J = -J\sum_{\langle i,j\rangle} s_i s_j, \qquad M = \sum_i s_i, \qquad p(s \mid T,h) \propto \exp\!\left[-\frac{E_J - hM}{T}\right].
+$$
+
+With $\mathcal{E} \equiv E_J - hM$, the scores are $\partial_T \log p = (\mathcal{E} - \langle\mathcal{E}\rangle)/T^2$ and $\partial_h \log p = (M - \langle M\rangle)/T$, which gives
+
+$$
+F_{TT} = \frac{\operatorname{Var}(E_J - hM)}{T^4}, \qquad
+F_{hh} = \frac{\operatorname{Var}(M)}{T^2}, \qquad
+F_{Th} = \frac{\operatorname{Cov}(E_J - hM,\; M)}{T^3}.
+$$
+
+Estimated from Monte Carlo samples drawn from the physical ensemble (use autocorrelation-aware error bars, §2.3 audit note).
+
+### 6.2 Generative Scores
+
+For a conditional generative model $q_\theta(x \mid c)$ with condition $c \in \{T, h\}$, define the scores
+
+$$
+u_\theta(x) = \nabla_\theta \log q_\theta(x \mid c), \qquad
+u_c(x) = \partial_c \log q_\theta(x \mid c),
+$$
+
+both evaluated on **model samples** $x \sim q_\theta(\cdot \mid c)$ (not on MC data), so that the usual score identity $\mathbb{E}_q[u] = 0$ holds exactly.
+
+### 6.3 Model Fisher Matrices
+
+$$
+F_\theta = \mathbb{E}_q\!\left[u_\theta u_\theta^{\top}\right], \qquad
+G_c = \mathbb{E}_q\!\left[u_\theta\, u_c\right], \qquad
+F_{cc}^{\text{model}} = \mathbb{E}_q\!\left[u_c^2\right],
+$$
+
+and the cross term $F_{Th}^{\text{model}} = \mathbb{E}_q[u_T u_h]$.
+
+### 6.4 Schur Invariant
+
+$$
+r_c = \frac{G_c^{\top} F_\theta^{+} G_c}{F_{cc}^{\text{model}}} \in [0, 1], \qquad
+S_c = F_{cc}^{\text{model}}\,(1 - r_c),
+$$
+
+where $F_\theta^{+}$ is the Moore–Penrose pseudo-inverse. $r_c$ is the fraction of the model's $c$-information that is *linearly captured by the weight scores* — equivalently the $R^2$ of regressing $u_c$ on $u_\theta$ — and $S_c$ is the Schur-complement residual ($c$-information not accessible through $\theta$). The range $[0,1]$ follows from the Cauchy–Schwarz / projection argument.
+
+### 6.5 Exact Structural Identities to Test
+
+| ID | Identity | Setting | Why it must hold |
+|----|----------|---------|------------------|
+| (a) | $r_c$ is unchanged under $u_\theta \to A u_\theta$ | Any invertible $A$ (reparametrisation $\theta \to \theta'$ with Jacobian $A$) | $F_\theta \to A F_\theta A^{\top}$, $G_c \to A G_c$, so $G_c^{\top}F_\theta^{+}G_c \to G_c^{\top}A^{\top}(AF_\theta A^{\top})^{+}AG_c = G_c^{\top}F_\theta^{+}G_c$; $F_{cc}^{\text{model}}$ is untouched |
+| (b) | $r_T = 0$ | **Classifier** with model-sampled labels $y \sim p_\theta(y \mid x)$, $x \sim p_{\text{phys}}(x \mid T)$ | $\theta$ enters only through $p_\theta(y\mid x)$ and $T$ only through $p(x\mid T)$, so $u_\theta = \nabla_\theta\log p_\theta(y\mid x)$ has $\mathbb{E}_{y\mid x}[u_\theta] = 0$ and $u_T = u_T(x)$ depends on $x$ only; hence $G_T = \mathbb{E}_x[u_T\,\mathbb{E}_{y\mid x}u_\theta] = 0$ |
+| (c) | $r_h = 0$ and $F_{Th}^{\text{model}} = 0$ | **$\mathbb{Z}_2$-equivariant generative model** $q_\theta(-x \mid -h) = q_\theta(x \mid h)$ (for all $\theta$), evaluated at $h = 0$ | At $h=0$, $q(-x)=q(x)$ gives $u_\theta(-x) = u_\theta(x)$ (even), while differentiating the equivariance in $h$ gives $u_h(-x) = -u_h(x)$ (odd), so $G_h = \mathbb{E}_q[u_\theta u_h] = 0$; likewise $u_T$ is even, so $\mathbb{E}_q[u_T u_h] = 0$ |
+| (d) | $r_f(T)$ = held-out $R^2$ (function-space invariant, classifier) | Regress $s_T = (E_J - \langle E_J\rangle)/T^2$ onto $\nabla_\theta f(x)$, with $P \ll N$ ($P$ = #parameters, $N$ = #samples) | Function-space analogue of $r_T$ for a classifier output $f(x)$: it measures how much of the physical $T$-score is linearly representable by the network's parameter-gradient features. Use a train/held-out split over **independent configurations** (no $\pm\mathbf{S}$ pairs across the split); $E_J$ replaces $E_J - hM$ only at $h=0$ — for $h\neq 0$ centre $E_J - hM$ instead |
+
+**Test notes**
+
+- (a), (b), (c) are **exact** statements: with finite $N_{\text{samples}}$ they must hold to numerical precision (a) or to Monte Carlo noise consistent with $O(1/\sqrt{N})$ (b, c); (c) additionally requires an architecturally enforced equivariance, not merely a trained approximation.
+- Use $F_\theta^{+}$ with an explicit rank/ridge cutoff; report the cutoff, since $r_c$ is sensitive to it when $F_\theta$ is near-singular ($P > N$).
+- (d) is the only identity that uses physical (MC) data directly; for (b) the classifier's labels come from the model itself, not from the phase label of §1.5.
