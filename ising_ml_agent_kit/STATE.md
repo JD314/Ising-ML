@@ -1,7 +1,7 @@
 # STATE · estado vivo (el agente actualiza este archivo)
 
 **Última actualización:** 2026-11-04  **Agente/persona:** Antigravity (Gemini)  
-**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-07 (métricas de información por capa y cotas variacionales).
+**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-08 (espacio de Fisher en parámetros y descomposición espectral).
 
 ## Tablero
 
@@ -14,7 +14,7 @@
 | MLP-04 | Entrenamiento MLP con checkpoints | 03 | 02 | DONE | `ckpt/seed{0..4}/*.pt`, `experiments/mlp_L10/MLP-04/{train_mlp.py,config.json,metrics.json,figs/,notes.md}` | 5 semillas convergen en 50-69 épocas; 4/5 semillas estables (<1% var); test acc media 86.32%; checkpoints guardados. |
 | MLP-05 | Comportamiento vs oráculo | 04 | 03, 04 | DONE | `experiments/mlp_L10/MLP-05/{evaluate_behavior.py,config.json,metrics.json,figs/,notes.md}` | Caída de accuracy en Tc es INTRÍNSECA (Acc net 56.0% vs oracle 52.7%, Delta CE en CI); 96.1% de varianza del logit explicada por E. |
 | MLP-06 | Sondas por capa | 05 | 04 | DONE | `experiments/mlp_L10/MLP-06/{evaluate_probes.py,config.json,metrics.json,notes.md,figs/}` | Brecha de accesibilidad Delta colapsa en h1 (Delta=1.000 en entrada s -> 0.000 en h1 con R^2=83.4%); phi_lin(s)<=0.000 (Z2); DPI respetada y controles separados. |
-| MLP-07 | Métricas de información | 06 | 05, 06 | TODO | | |
+| MLP-07 | Métricas de información | 06 | 05, 06 | DONE | `experiments/mlp_L10/MLP-07/{evaluate_information.py,config.json,metrics.json,notes.md,figs/}` | Cadena DPI respetada (I(T;h1)=0.701 nats, I(Y;h1)=0.399 nats / 95.1% retenido); rango efectivo comprimido a 3.03 en Tc; 0 neuronas muertas. |
 | MLP-08 | Fisher en parámetros por capa | 07 | 04, 06 | TODO | | |
 | MLP-09 | Lado de la entrada | 08 | 04 | TODO | | |
 | MLP-10 | Dinámica de entrenamiento | 09 | 06, 07, 08 | TODO | | |
@@ -56,6 +56,16 @@ Estados: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DONE_NEGATIVE` (hech
 (ninguna)
 
 ## Bitácora de relevo (la entrada más reciente arriba)
+
+```
+### 2026-11-04 · MLP-07 · Antigravity (Gemini)
+Hecho:          Evaluación rigurosa de cotas variacionales de información mutua I(T; h_l) e I(Y; h_l) en SimpleMLP (5 semillas) sobre 217,600 configuraciones en 64 temperaturas. Verificación estricta de la cadena DPI: I(T; X) >= I(T; h1) >= I(T; f) >= I(T; y_hat) dentro de 0.02 nats de tolerancia muestral. Retención en h1 del 72.5% de I(T; X) (0.701 nats) y 95.1% de I(Y; X) (0.399 nats). Compresión de la representación a rango efectivo r_eff = 3.03 en Tc (sobre dim=16). Cero neuronas muertas. Entropía de patrones ReLU en Tc H_MM = 6.62 nats (517.8 patrones distintos). Robustez de información 1-D por neurona ante barridos de binning (10, 20, 30).
+No hecho:       Cálculo del espacio de Fisher en parámetros F_thetatheta, matriz de Gram dual y outliers sobre Marchenko-Pastur (tarea MLP-08).
+Archivos:       experiments/mlp_L10/MLP-07/{evaluate_information.py,config.json,metrics.json,notes.md,figs/}, STATE.md, reporte.md
+Números clave:  I(T; h1) = 0.7008 nats (72.5%); I(Y; h1) = 0.3991 nats (95.1%); r_eff(Tc) = 3.03; dead_neurons = 0; active_frac(Tc) = 49.6%; mi_chain_ok = True.
+Sorpresas:      El logit y la probabilidad conservan casi el 70% de la información sobre T a pesar de haber sido entrenados únicamente con supervisión binaria de fase, lo que confirma que el logit aproxima una función mono-parámetro de la energía.
+Siguiente paso: Ejecutar MLP-08 (ising-fisher-parameter-space: calcular r_f^(l)(T), Gram dual, espectros y outliers MP).
+```
 
 ```
 ### 2026-11-04 · MLP-06 · Antigravity (Gemini)

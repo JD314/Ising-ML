@@ -1,0 +1,24 @@
+{
+  "task_id": "MLP-07",
+  "git_hash": "2634ebb8c367365dbe7e3c908f10a55c92fffdec",
+  "data_path": "data/L10_data_audit.h5",
+  "n_seeds": 5,
+  "n_temperatures": 64,
+  "layers": [
+    "input",
+    "h1",
+    "logit",
+    "p",
+    "yhat"
+  ],
+  "exact_I_TX": 0.967134,
+  "exact_I_YX": 0.419725,
+  "H_T": 4.1588830833596715,
+  "H_Y": 0.6926588198060253,
+  "n_bootstrap": 1000,
+  "eps_values": [
+    0.0001,
+    0.001,
+    0.01
+  ]
+}
