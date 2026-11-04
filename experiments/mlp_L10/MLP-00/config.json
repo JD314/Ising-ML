@@ -1,0 +1,14 @@
+{
+  "task": "MLP-00",
+  "suite": "pytest",
+  "smoke_exploration": {
+    "L": 8,
+    "nT": 8,
+    "chains": 8,
+    "samples": 300,
+    "burn": 100,
+    "clf_epochs": 2,
+    "gen_epochs": 2,
+    "n_model_samples": 200
+  }
+}
