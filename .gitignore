@@ -194,3 +194,7 @@ dmypy.json
 cython_debug/
 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#C++,Python
+data/
+ckpt/
+*.h5
+*.pt
