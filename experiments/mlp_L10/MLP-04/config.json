@@ -1,0 +1,68 @@
+{
+  "task_id": "MLP-04",
+  "git_hash": "b51e45d25c1d8a56e1d519cb950b9438a844633a",
+  "architecture": "SimpleMLP (100 -> 16 -> 1, ReLU)",
+  "batch_size": 256,
+  "lr": 0.001,
+  "optimizer": "Adam",
+  "loss": "BCEWithLogitsLoss",
+  "patience": 10,
+  "max_epochs": 200,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "checkpoint_schedule": [
+    0,
+    1,
+    2,
+    3,
+    34,
+    5,
+    8,
+    13,
+    21,
+    55
+  ],
+  "intra_epoch_steps": [
+    1,
+    50,
+    20,
+    5,
+    200
+  ],
+  "splits": {
+    "train": [
+      15,
+      9,
+      14,
+      7,
+      12,
+      10,
+      6,
+      19,
+      3,
+      0,
+      16,
+      5,
+      11,
+      18
+    ],
+    "val": [
+      2,
+      4,
+      17
+    ],
+    "test": [
+      1,
+      13,
+      8
+    ]
+  },
+  "train_samples": 179200,
+  "val_samples": 38400,
+  "test_samples": 38400
+}
