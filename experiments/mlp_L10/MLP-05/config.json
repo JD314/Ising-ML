@@ -1,0 +1,14 @@
+{
+  "task_id": "MLP-05",
+  "git_hash": "9e67813f40f7df3ba7fe85a22759220cb1a08ce8",
+  "n_boot": 1000,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "data_path": "data/L10_data_audit.h5",
+  "ckpt_root": "ckpt"
+}
