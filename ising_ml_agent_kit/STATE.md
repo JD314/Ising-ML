@@ -1,7 +1,7 @@
 # STATE · estado vivo (el agente actualiza este archivo)
 
 **Última actualización:** 2026-11-04  **Agente/persona:** Antigravity (Gemini)  
-**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-06 (sondas por capa y accesibilidad de Fisher).
+**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-07 (métricas de información por capa y cotas variacionales).
 
 ## Tablero
 
@@ -13,7 +13,7 @@
 | MLP-03 | Baselines (E, \|M\|, lineal, RF) | 04 | 02 | DONE | `experiments/mlp_L10/MLP-03/{evaluate_baselines.py,config.json,metrics.json,figs/,notes.md}` | Logística en E alcanza CE a +2.16% del oráculo (Acc 87.9% vs 88.1%); lineal en s colapsa a CE=0.693 nats por Z2. |
 | MLP-04 | Entrenamiento MLP con checkpoints | 03 | 02 | DONE | `ckpt/seed{0..4}/*.pt`, `experiments/mlp_L10/MLP-04/{train_mlp.py,config.json,metrics.json,figs/,notes.md}` | 5 semillas convergen en 50-69 épocas; 4/5 semillas estables (<1% var); test acc media 86.32%; checkpoints guardados. |
 | MLP-05 | Comportamiento vs oráculo | 04 | 03, 04 | DONE | `experiments/mlp_L10/MLP-05/{evaluate_behavior.py,config.json,metrics.json,figs/,notes.md}` | Caída de accuracy en Tc es INTRÍNSECA (Acc net 56.0% vs oracle 52.7%, Delta CE en CI); 96.1% de varianza del logit explicada por E. |
-| MLP-06 | Sondas por capa | 05 | 04 | TODO | | |
+| MLP-06 | Sondas por capa | 05 | 04 | DONE | `experiments/mlp_L10/MLP-06/{evaluate_probes.py,config.json,metrics.json,notes.md,figs/}` | Brecha de accesibilidad Delta colapsa en h1 (Delta=1.000 en entrada s -> 0.000 en h1 con R^2=83.4%); phi_lin(s)<=0.000 (Z2); DPI respetada y controles separados. |
 | MLP-07 | Métricas de información | 06 | 05, 06 | TODO | | |
 | MLP-08 | Fisher en parámetros por capa | 07 | 04, 06 | TODO | | |
 | MLP-09 | Lado de la entrada | 08 | 04 | TODO | | |
@@ -49,12 +49,23 @@ Estados: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DONE_NEGATIVE` (hech
 | 2026-11-04 | D9 | Margen de exceso de CE de la logística sobre E documentado en +2.16% | El oráculo exacto P*(y=1\|E) tiene un logit con curvatura intrínseca en volumen finito; una sigmoide mono-parámetro alcanza CE=0.2741 vs CE=0.2683 del oráculo (exceso 2.16%, o +0.72% al incluir \|M\|). |
 | 2026-11-04 | D10 | Paciencia fijada en 10 épocas para SimpleMLP en batch 256 | Todas las semillas convergen limpiamente entre 50 y 69 épocas sin sobreajuste severo. |
 | 2026-11-04 | D11 | Veredicto sobre la caída de accuracy en Tc declarado como INTRÍNSECO | En Tc, Delta CE = +0.0621 nats con IC95% = [-0.0135, +0.0164] nats (el 0 está dentro del IC del ensamble) y accuracy de la red (55.97%) igual o ligeramente superior a la bayesiana (52.67%). |
+| 2026-11-04 | D12 | Sanidad Z2 en entrada verificada estrictamente (phi_lin_input_max_abs = 0.000000 < 0.02) y colapso de brecha de accesibilidad confirmado en h1 (Delta=0.000 a Tc) | Confirma que la primera capa oculta realiza la transformación de representaciones no lineal a legible linealmente para el score térmico. |
 
 ## Anomalías abiertas
 
 (ninguna)
 
 ## Bitácora de relevo (la entrada más reciente arriba)
+
+```
+### 2026-11-04 · MLP-06 · Antigravity (Gemini)
+Hecho:          Evaluación exhaustiva de sondas por capa en SimpleMLP (5 semillas) a lo largo de las 64 temperaturas en test split por cadenas. Sonda lineal Ridge con GroupKFold interno; sonda no lineal combinando PCA+KNN y MLPRegressor (1x64). Verificación estricta de sanidad Z2 en entrada (phi_lin_input_max_abs = 0.000000 < 0.02). Colapso de la brecha de accesibilidad Delta_l de 1.000 en entrada a 0.0000 en h1 (R^2 = 83.42% a Tc). Verificación de DPI respetada a través de las capas. Eficiencia por neurona acotada (<= 1.0); 70.8% de neuronas en h1 codifican primariamente energía. Control de cadenas permutadas max |R^2| = 0.0074 < 0.05 y separación neta frente a red no entrenada en Tc (83.4% vs 30.1%).
+No hecho:       Cálculo de cotas variacionales de información mutua I(T; h_l) e I(Y; h_l) y entropía por capa (tarea MLP-07).
+Archivos:       experiments/mlp_L10/MLP-06/{evaluate_probes.py,config.json,metrics.json,notes.md,figs/}, STATE.md
+Números clave:  phi_lin_input_max_abs = 0.000000; phi_lin_h1(Tc) = 0.8342; phi_nonlin_h1(Tc) = 0.8342; Delta(Tc) = 0.0000; control_permuted_r2_max_abs = 0.007384; controls_separate_from_trained = True; shortcut_frac = 29.2%.
+Sorpresas:      El colapso de la brecha de accesibilidad no lineal en la primera capa es prácticamente total: una sola transformación afin+ReLU proyecta la información cuadrática de pares de espines en un subespacio linealmente transparente para la energía.
+Siguiente paso: Ejecutar MLP-07 (ising-information-metrics: medir I(T; h_l), I(Y; h_l), entropía diferencial y rango efectivo).
+```
 
 ```
 ### 2026-11-04 · MLP-05 · Antigravity (Gemini)

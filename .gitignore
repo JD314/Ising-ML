@@ -2,10 +2,14 @@
 data/
 *.txt
 *.png
+!experiments/mlp_L10/**/*.png
+
 
 # Results and generated images
 img_results/
-experiments/
+# experiments/
+
+
 
 # Comparison experiments folder
 comparison_experiments/
