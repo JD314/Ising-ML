@@ -40,9 +40,9 @@ Cada módulo ejecuta un protocolo científico estricto con artefactos reproducib
 | **MLP-05** | Comportamiento frente al oráculo | `ising-behavior-vs-oracle` (MODO RED) | 03, 04 | **DONE** | [`evaluate_behavior.py`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-05/evaluate_behavior.py), métricas B1–B7, calibración |
 | **MLP-06** | Sondas por capa | `ising-layer-probes` | 04, 05 | **DONE** | [`evaluate_probes.py`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-06/evaluate_probes.py), brechas $\Delta_l(T)$, heatmaps de neuronas |
 | **MLP-07** | Información y entropía por capa | `ising-information-metrics` | 05, 06 | **DONE** | [`evaluate_information.py`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-07/evaluate_information.py), cotas variacionales $I(T; h_l), I(Y; h_l)$ |
-| **MLP-08** | Fisher en parámetros, por capa | `ising-fisher-parameter-space` | 04, 06 | **TODO** | Gráficos de $r_f^{(l)}(T)$, descomposición Gram dual y outliers Marchenko-Pastur |
-| **MLP-09** | Lado de la entrada | `ising-input-side-analysis` | 04 | **TODO** | Matriz cuadrática efectiva $Q_{ij}$, transformada de Fourier de pesos y modos $k$ |
-| **MLP-10** | Dinámica del aprendizaje | `ising-training-dynamics` | 06, 07, 08 | **TODO** | Trayectorias de emergencia temporal a través del calendario de checkpoints |
+| **MLP-08** | Fisher en parámetros, por capa | `ising-fisher-parameter-space` | 04, 06 | **DONE** | [`evaluate_fisher.py`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/evaluate_fisher.py), [`notes.md`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/notes.md), alineamiento $r_f^{(l)}(T)$, Gram dual y outliers MP |
+| **MLP-09** | Lado de la entrada | `ising-input-side-analysis` | 04 | **DONE** | [`evaluate_input_side.py`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-09/evaluate_input_side.py), [`notes.md`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-09/notes.md), sustituto cuadrático $Q_{ij}$, Fourier de $W_1$, ablaciones |
+| **MLP-10** | Dinámica del aprendizaje | `ising-training-dynamics` | 06, 07, 08 | **DONE** | [`evaluate_dynamics.py`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/evaluate_dynamics.py), [`notes.md`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/notes.md), tiempos de emergencia $t_l$, orden simultáneo/bottom-up |
 | **MLP-11** | Controles y nulos | `ising-controls-nulls` | 05–10 | **TODO** | Pruebas de falsabilidad con umbrales desplazados, nulos de inicialización y shuffle |
 | **SYN** | Síntesis y decisión | `ising-synthesis-report` | todas | **TODO** | Decisión formal Go/No-Go hacia arquitecturas convolucionales y escalado en $L$ |
 
@@ -300,40 +300,161 @@ Cada módulo ejecuta un protocolo científico estricto con artefactos reproducib
 
 ---
 
-## 6. Próximas Fases: Especificación Técnica según el Roadmap
+### MLP-08: Espacio de Fisher en Parámetros, Gram Dual y Borde Marchenko-Pastur
+- **¿Qué pretende lograr la prueba?**  
+  Evaluar la geometría del espacio tangente del clasificador a lo largo de las temperaturas y bloques arquitectónicos. Determinar si el gradiente de parámetros $\nabla_\theta f(x)$ contiene la dirección de la energía física $s_T = (E - \langle E \rangle)/T^2$ mediante el coeficiente de alineamiento invariante $r_f(T)$ evaluado en subconjuntos held-out independientes. Construir la matriz de Gram dual $K = G G^T \in \mathbb{R}^{n_s \times n_s}$ en precisión `float64` con probabilidades exactas del modelo $p(1-p)\nabla f \nabla f^T$ (sin recurrir jamás a la Fisher empírica) para diagonalizar el espacio de Fisher y contrastar el espectro empírico frente al borde teórico de Marchenko-Pastur $\lambda_+$. Validar la hipótesis contra cuatro controles nulos obligatorios: red en inicialización (época 0), pesos barajados por capa, features aleatorias congeladas, y etiquetas permutadas.
+- **Metodología y Ejecución:**  
+  - Verificación formal de las identidades analíticas (a)–(d) en [`tests/test_fisher.py`](file:///home/jd/Projects/Ising-ML/tests/test_fisher.py) (18 tests superados con 100% de éxito).
+  - Regresión ridge held-out por cadena de $s_T$ sobre $\nabla_\theta f(x)$ global (1,633 parámetros), capa 1 (1,616 parámetros) y capa 2 (17 parámetros).
+  - Escaneo de tamaño de muestra $n_s \in \{500, 1000, 2000, 4000\}$ en $T_c$ para verificar la estabilidad asintótica de los valores atípicos (*outliers*) frente al borde MP $\lambda_+ = \sigma^2 (1 + \sqrt{P/n_s})^2$.
+  - Medición del autosolapamiento de autovectores funcionales entre semillas independientes (calibración BBP).
+- **Resultados Notables:**  
+  - **Alineamiento Superior frente a Nulos:** La red entrenada alcanza $r_f(T_c) = 0.6908 \pm 0.1468$, superando holgadamente a los 4 controles nulos obligatorios:
+    - *Null 1 (Inicialización época 0):* $0.5439$ (brecha $-0.1469$)
+    - *Null 2 (Pesos barajados):* $0.6161$ (brecha $-0.0746$)
+    - *Null 3 (Features aleatorias congeladas):* $0.5686$ (brecha $-0.1221$)
+    - *Null 4 (Etiquetas / $s_T$ permutado):* $-0.3182$ (azar puro)
+  - **Dualidad Funcional Analítica Confirmada:** El alineamiento de la segunda capa $r_f^{(2)}(T_c) = 0.8329$ coincide con una precisión extraordinaria con la fracción lineal de activaciones $\phi_{h_1}^{\mathrm{lin}}(T_c) = 0.8342$ medida en MLP-06. Esto valida la identidad analítica $\nabla_{W_2} f(x) = h_1(x)$: el espacio tangente de la última capa es exactamente la representación lineal aprendida por la capa oculta.
+  - **Reparto de la Traza de Fisher:** La traza total de Fisher $\operatorname{Tr}(F_\theta) = 65.44$ se distribuye en un 73.38% en la capa 1 (48.03) y un 26.62% en la capa 2 (17.42).
+  - **Compresión Espectral y Separación de Marchenko-Pastur:**
+    - Rango efectivo a $T_c$: $R_{\mathrm{eff}} = 22.45$ (compresión masiva sobre la dimensión nominal $P=1633$).
+    - Razón al borde Marchenko-Pastur: $\lambda_{\max} / \lambda_+ \approx 94.05$, mostrando que los modos aprendidos se sitúan casi dos órdenes de magnitud por encima del bulk estocástico.
+    - Estabilidad en $n_s$: El autovalor dominante permanece estrictamente estable ($\lambda_1 = 28.51$ a $n_s=500$, $27.87$ a $n_s=1000$, $27.61$ a $n_s=2000$, y $27.46$ a $n_s=4000$), mientras $\lambda_+$ desciende de $0.3138$ a $0.1070$.
+    - Autosolapamiento funcional entre semillas: $|\langle u_1^{(a)}, u_1^{(b)} \rangle|^2 = 0.7627 \pm 0.1729$, demostrando que el modo dominante es invariante y no depende de la inicialización estocástica.
 
-### MLP-08: Espacio de Fisher en Parámetros y Descomposición Espectral
-- **Objetivo Central:**  
-  Evaluar la curvatura de la superficie de pérdida en el espacio de parámetros mediante la métrica de Fisher empírica $F_{\theta\theta}$ y el coeficiente de alineamiento de Fisher $r_f(T)$.
-- **Metodología y Métricas (F1–F8):**  
-  - Cálculo de gradientes por muestra $\nabla_\theta f(x)$ usando `torch.func.vmap`.
-  - Construcción de la matriz de Gram dual $G = J J^T$ sobre subconjuntos held-out para diagonalizar el espacio de representaciones paramétricas sin necesidad de almacenar matrices de $1633 \times 1633$.
-  - Comparación del espectro empírico de valores propios frente a la distribución teórica de Marchenko-Pastur para detectar valores atípicos (*outliers*) que codifican los modos físicos del Hamiltoniano.
-  - Comprobación contra controles nulos: pesos de red barajados, inicialización aleatoria y etiquetas aleatorizadas.
+#### Figuras de MLP-08: Geometría de Fisher en Parámetros y Borde de Marchenko-Pastur
 
-### MLP-09: Análisis del Lado de la Entrada y Modos de Fourier
-- **Objetivo Central:**  
-  Interpretar la conectividad de la primera capa lineal $W^{(1)} \in \mathbb{R}^{16 \times 100}$: ¿aprende la red la topología del toro bidimensional y el acoplamiento a primeros vecinos $J$?
-- **Metodología y Métricas (G1–G6):**  
-  - Descomposición en transformada de Fourier bidimensional de los pesos espaciales de cada neurona receptora.
-  - Sustituto cuadrático efectivo de la función de la red:
-    $$f_{\text{quad}}(s) = s^T Q s + b_0$$
-  - Comparación de la matriz $Q$ contra el Hamiltoniano físico exacto $J_{ij}$. Se verificará si $Q_{ij}$ concentra su peso en los 4 primeros vecinos toroidales (aprendizaje del Hamiltoniano local) o en el modo uniforme $k=(0,0)$ (aprendizaje de la magnetización global).
+![Alineamiento r_f(T) vs 4 Controles Nulos](experiments/mlp_L10/MLP-08/figs/r_f_vs_T.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-08/figs/r_f_vs_T.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/figs/r_f_vs_T.png)  
+- **Qué muestra el gráfico:** Curvas de alineamiento $r_f(T)$ para el perceptrón entrenado frente a los cuatro controles nulos obligatorios (época 0, pesos barajados, features aleatorias y etiquetas barajadas) a lo largo de las 64 temperaturas.
+- **Significado físico:** Demuestra que la alineación del gradiente con el observable térmico $s_T$ no es un artefacto de la dimensionalidad ni de la covarianza de entrada $\langle ss^T \rangle$, sino una estructura aprendida que culmina cerca de $T_c$.
 
-### MLP-10: Dinámica de Entrenamiento a través de Checkpoints
-- **Objetivo Central:**  
-  Determinar el orden temporal de emergencia de las invarianzas físicas a lo largo de las épocas de entrenamiento: ¿se aprende primero la energía en la capa de salida y se ajusta $h_1$ después, o la representación emerge de abajo hacia arriba?
-- **Metodología (H1–H5):**  
-  - Evaluación retrospectiva de las métricas de accesibilidad ($\phi_l$), Fisher ($r_f$) e información mutua ($I$) en cada uno de los checkpoints guardados en `ckpt/seed{s}/` (épocas 0, 1, 2, 3, 5, 8, 13, 21, 34, 55 y pasos de la época 1).
-  - Medición del instante exacto de divergencia de los valores atípicos del espectro de Gram dual respecto al umbral de Marchenko-Pastur.
+![Alineamiento por Capa r_f^(l)(T)](experiments/mlp_L10/MLP-08/figs/r_f_by_layer_vs_T.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-08/figs/r_f_by_layer_vs_T.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/figs/r_f_by_layer_vs_T.png)  
+- **Qué muestra el gráfico:** Descomposición por bloques del alineamiento $r_f^{(l)}(T)$ comparando el bloque de la capa 1 ($W_1, b_1$) con el de la capa 2 ($W_2, b_2$) y el modelo global.
+- **Significado físico:** Visualiza la dualidad funcional: mientras que la primera capa alcanza $r_f^{(1)} \approx 0.46$, la segunda capa se dispara a $r_f^{(2)} \approx 0.83$, coincidiendo con la capacidad de lectura lineal de $h_1$.
+
+![Espectro de la Matriz de Gram Dual vs Borde Marchenko-Pastur](experiments/mlp_L10/MLP-08/figs/gram_spectrum_by_layer.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-08/figs/gram_spectrum_by_layer.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/figs/gram_spectrum_by_layer.png)  
+- **Qué muestra el gráfico:** Espectro de autovalores de la matriz de Gram dual $GG^T$ en $T_c$ ($n_s=2000$) en escala logarítmica frente al umbral teórico de Marchenko-Pastur $\lambda_+$.
+- **Significado físico:** Evidencia la emergencia de modos colectivos físicos macroscópicos que escapan completamente del continuum del ruido aleatorio de pesos.
+
+![Estabilidad de Outliers vs Tamaño de Muestra](experiments/mlp_L10/MLP-08/figs/outliers_vs_ns.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-08/figs/outliers_vs_ns.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/figs/outliers_vs_ns.png)  
+- **Qué muestra el gráfico:** Número de autovalores superiores a $\lambda_+$ en función del tamaño muestral $n_s \in \{500, 1000, 2000, 4000\}$.
+- **Significado físico:** Confirma que el número y magnitud de los modos dominantes no divergen artificialmente, garantizando que la estructura espectral de Fisher es asintóticamente estable.
+
+![Reparto de la Traza de Fisher por Capa](experiments/mlp_L10/MLP-08/figs/trace_fraction_by_layer.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-08/figs/trace_fraction_by_layer.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-08/figs/trace_fraction_by_layer.png)  
+- **Qué muestra el gráfico:** Participación porcentual de cada capa en la traza total de Fisher $\operatorname{Tr}(F_\theta)$ en función de la temperatura.
+- **Significado físico:** Revela que la mayor parte de la curvatura del espacio de pérdida está radicada en los pesos de entrada que procesan la geometría bidimensional del retículo.
+
+---
+
+### MLP-09: Análisis del Lado de la Entrada (Transformada de Fourier 2D, Sustituto Cuadrático y Ablaciones)
+- **¿Qué pretende lograr la prueba?**  
+  Dilucidar qué rasgos de las configuraciones de entrada utiliza `SimpleMLP`: ¿aprende la conectividad local del Hamiltoniano físico (acoplamientos a primeros vecinos $J_{ij}$) o explota el atajo de la magnetización global al cuadrado ($M^2$, modo $k=0$)?
+- **Metodología y Ejecución:**  
+  - Descomposición espectral mediante FFT bidimensional de los pesos espaciales de cada una de las 16 neuronas de la capa $W_1$ ($10 \times 10$), cuantificando el reparto de potencia en el modo $k=(0,0)$, modos infrarrojos ($0 < |k| \le 2$), y modos ultravioleta locales ($|k| > 2$).
+  - Ajuste de un sustituto cuadrático exacto $f(x) \approx c + \sum_{i < j} Q_{ij} s_i s_j$ sobre 38,400 muestras de prueba mediante regresión Ridge en validación cruzada agrupada por cadenas independientes.
+  - Descomposición radial de la matriz aprendida $Q_{ij}$ por distancia toroidal $r$, cuantificando la concentración de potencia en primeros vecinos ($r=1$) frente al modo uniforme $k=0$ y calculando la dispersión relativa de traslación.
+  - Medición de la saliencia espacial media $\mathbb{E}_x |\partial f / \partial s_i|$ en los 100 sitios del retículo.
+  - Reentrenamiento completo de tres familias de ablaciones con 3 semillas independientes: modo $k=0$ solo (`k0`, entrada $M$), enlaces pares de vecinos (`even_nn`, 200 entradas $s_i s_j$), y energía escalar (`energy`, 1 entrada $E$).
+- **Resultados Notables:**  
+  - **Espectro 2D de Fourier de $W_1$:** En la red entrenada, el **72.00%** de la potencia se concentra en modos locales ultravioleta ($|k| > 2$) requeridos para calcular productos de espines locales, mientras que el modo $k=0$ representa apenas el **5.68%** (frente a 0.85% en la inicialización aleatoria).
+  - **Fidelidad del Sustituto Cuadrático:** El sustituto cuadrático captura el **96.82%** de toda la varianza del logit completo ($R^2 = 0.9682$, IC 95%: $[0.9663, 0.9700]$).
+  - **Reparto de Potencia de $Q$:**
+    - **Primeros Vecinos ($r=1$, estructura $J_{ij}$):** Concentran el **19.33%** de la potencia total de $Q$.
+    - **Modo $k=0$ ($M^2$ / atajo de magnetización):** Explica únicamente el **2.07%** de la potencia.
+    - Invarianza traslacional aprendida: la dispersión relativa de $Q_{ij}$ entre vecinos próximos es de solo **0.4883**, demostrando que la red aprende la simetría de traslación del toro sin ninguna restricción convolucional forzada.
+  - **Prueba Definitiva de Ablaciones:**
+    - `energy` sola: alcanza un **87.94%** de exactitud media (superando al perceptrón completo en $T_c$: 59.17% vs 55.97%).
+    - `even_nn` (200 enlaces $s_i s_j$): alcanza exactamente el mismo rendimiento óptimo (**87.94%** de exactitud media).
+    - `k0` ($M$ solo): colapsa a menor exactitud (85.86%) y sufre un exceso severo de entropía cruzada.
+  - *Veredicto:* **La red aprende la energía, no el atajo de la magnetización.** La primera capa oculta actúa como un sintetizador de productos locales de espines.
+
+#### Figuras de MLP-09: Análisis del Lado de la Entrada y Ablaciones
+
+![Espectro de Potencia 2D de Fourier de W1](experiments/mlp_L10/MLP-09/figs/fourier_power_spectrum.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-09/figs/fourier_power_spectrum.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-09/figs/fourier_power_spectrum.png)  
+- **Qué muestra el gráfico:** Mapa 2D de la densidad de potencia en el espacio de momentos $(k_x, k_y)$ y diagrama de barras comparando la distribución de potencia entre la red entrenada y la inicialización aleatoria.
+- **Significado físico:** Demuestra que la optimización suprime los modos globales homogéneos en favor de modos locales de alta frecuencia espacial, esenciales para discriminar pares de espines correlacionados.
+
+![Perfil del Sustituto Cuadrático Q vs Distancia](experiments/mlp_L10/MLP-09/figs/quadratic_surrogate_profile.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-09/figs/quadratic_surrogate_profile.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-09/figs/quadratic_surrogate_profile.png)  
+- **Qué muestra el gráfico:** Valor medio y dispersión del acoplamiento aprendido $Q_{ij}$ en función de la distancia toroidal $r$, comparado con el Hamiltoniano de Ising $J_{ij}$ escalado, junto al gráfico circular de reparto de potencia de Frobenius.
+- **Significado físico:** Certifica que los pesos cuadráticos efectivos se concentran fuertemente en $r=1$, decayendo con la distancia y evidenciando que el perceptrón redescubre la estructura local del modelo de Ising.
+
+![Mapas de Saliencia Espacial 10x10](experiments/mlp_L10/MLP-09/figs/saliency_map_10x10.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-09/figs/saliency_map_10x10.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-09/figs/saliency_map_10x10.png)  
+- **Qué muestra el gráfico:** Gradiente medio absoluto de los logits respecto a cada espín $\mathbb{E}_x |\partial f / \partial s_i|$ sobre la rejilla $10 \times 10$ para diferentes temperaturas.
+- **Significado físico:** Valida la homogeneidad espacial aprendida (coeficiente de variación $CV = 0.1511$ en $T_c$), confirmando que todos los sitios del retículo contribuyen equitativamente sin bordes artificiales.
+
+![Exactitud y Exceso de Entropía Cruzada en Ablaciones](experiments/mlp_L10/MLP-09/figs/ablations_accuracy_vs_T.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-09/figs/ablations_accuracy_vs_T.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-09/figs/ablations_accuracy_vs_T.png)  
+- **Qué muestra el gráfico:** Curvas de $\text{Accuracy}(T)$ y exceso de entropía cruzada $\Delta \text{CE}(T)$ para las ablaciones de entrada (`energy`, `even_nn`, `k0`) confrontadas contra el perceptrón completo sobre espines $s$ y el oráculo bayesiano óptimo.
+- **Significado físico:** Demuestra empíricamente que dotar a la red únicamente de los enlaces de primeros vecinos es matemáticamente equivalente a suministrarle la energía escalar exacta, mientras que restringirla a la magnetización destruye su rendimiento crítico.
+
+---
+
+## 6. Fase 4: Dinámica del Aprendizaje y Emergencia Temporal
+
+### MLP-10: Dinámica de Entrenamiento a través de Checkpoints (Tiempos de Emergencia y Orden de Aprendizaje)
+- **¿Qué pretende lograr la prueba?**  
+  Determinar el orden temporal exacto de emergencia de las invarianzas físicas a lo largo del proceso de optimización estocástica: ¿emerge primero la energía en la capa oculta $h_1$ y se calibra el logit de salida después (aprendizaje de abajo hacia arriba / *bottom-up*), o emerge primero la lectura del logit? Delimitar la "fase rápida" del aprendizaje, rastrear la evolución espectral de la matriz de Fisher y caracterizar el régimen de aprendizaje (régimen perezoso / *lazy* vs aprendizaje de representaciones / *feature learning*).
+- **Metodología y Ejecución:**  
+  - Evaluación retrospectiva y rigurosa en 15 checkpoints por semilla (pasos intra-época 1, 5, 20, 50, 200 de la época 1, y épocas 0, 1, 2, 3, 5, 8, 13, 21, 34, 55) a lo largo de las 5 semillas independientes de `SimpleMLP`.
+  - Recálculo de las sondas lineales y no lineales de accesibilidad ($\phi_l^{\mathrm{lin}}$, $\phi_l^{\mathrm{nonlin}}$), alineamiento de Fisher por capa ($r_f^{(l)}$), métricas de Gram dual ($n_s=1000$), distancias de parámetros a la inicialización $\|\Delta \theta\| / \|\theta_0\|$, y similitud coseno del kernel tangente.
+  - Definición operativa del tiempo de emergencia $t_l$: primer instante del entrenamiento donde $\phi_l^{\mathrm{lin}}(T_c) \ge 0.5 \times \phi_{l, \mathrm{final}}^{\mathrm{lin}}(T_c)$.
+- **Resultados Notables:**  
+  - **Tiempos de Emergencia Medidos:**
+    - Capa oculta $h_1$: $t_{h_1} = 0.0800 \pm 0.1029$ épocas (alcanza el 50% de su valor convergido final ya entre los pasos intra-época 20 y 50 de la época 1).
+    - Logit de salida $f$: $t_{\mathrm{logit}} = 0.2314 \pm 0.3846$ épocas.
+  - **Veredicto del Orden de Aprendizaje (H2):** En 3 de 5 semillas la emergencia es simultánea dentro de la resolución de pasos ($t = 0.0286$ épocas), y en 2 de 5 semillas es estrictamente de abajo hacia arriba ($t_{h_1} < t_{\mathrm{logit}}$). En ninguna semilla el logit emerge antes que la capa oculta.
+  - **Delimitación de la Fase Rápida:** La transición principal de aprendizaje queda confinada entre las épocas 0 y 3, donde la pérdida de validación desciende verticalmente y la traza de Fisher se expande abruptamente.
+  - **Régimen de Feature Learning Comprobado (H4, H5):**
+    - El desplazamiento relativo de pesos es masivo: $\|\Delta \theta_1\| / \|\theta_{1,0}\| = 385\%$ y $\|\Delta \theta_2\| / \|\theta_{2,0}\| = 656\%$.
+    - El alineamiento relativo del kernel tangente $\operatorname{Tr}(K(t)K(0)) / (\|K(t)\| \|K(0)\|)$ rota profundamente, descartando categóricamente el régimen perezoso (lazy/NTK) y demostrando una reconfiguración interna activa de las representaciones.
+
+#### Figuras de MLP-10: Dinámica Temporal del Aprendizaje
+
+![Evolución de la Accesibilidad phi vs Épocas](experiments/mlp_L10/MLP-10/figs/phi_evolution_vs_epoch.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-10/figs/phi_evolution_vs_epoch.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/figs/phi_evolution_vs_epoch.png)  
+- **Qué muestra el gráfico:** Trayectoria de la fracción de Fisher lineal $\phi^{\mathrm{lin}}(T_c)$ para la capa oculta $h_1$ y el logit a lo largo del tiempo efectivo de entrenamiento (en escala symlog), superponiendo la curva de pérdida de validación y sombreando la fase rápida (épocas 0–3).
+- **Significado físico:** Ilustra la sincronía entre el aprendizaje funcional y la compresión termodinámica: la capacidad de extraer la energía física emerge de forma fulgurante en las primeras fracciones de época, estabilizándose asintóticamente tras la época 3.
+
+![Comparación de Tiempos de Emergencia por Semilla](experiments/mlp_L10/MLP-10/figs/learning_order_comparison.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-10/figs/learning_order_comparison.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/figs/learning_order_comparison.png)  
+- **Qué muestra el gráfico:** Tiempos de emergencia individuales $t_l$ para la capa oculta, el logit y los bloques de pesos en cada una de las 5 semillas.
+- **Significado físico:** Proporciona la evidencia empírica de que la representación interna de la energía precede o acompaña inmediatamente a la capacidad de predicción del logit en todas las realizaciones estocásticas.
+
+![Evolución de la Traza de Fisher y Rango Efectivo](experiments/mlp_L10/MLP-10/figs/fisher_trace_and_rank_vs_epoch.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-10/figs/fisher_trace_and_rank_vs_epoch.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/figs/fisher_trace_and_rank_vs_epoch.png)  
+- **Qué muestra el gráfico:** Evolución de la traza de la matriz de Fisher $\operatorname{Tr}(F_\theta)$ descompuesta por capas y la dinámica del rango efectivo $R_{\mathrm{eff}}$ y el número de outliers de Marchenko-Pastur a través de los checkpoints.
+- **Significado físico:** Muestra la estructuración geométrica del espacio de parámetros: los autovalores dominantes divergen del bulk de Marchenko-Pastur durante la fase rápida, consolidando el subespacio tangente relevante.
+
+![Movimiento Relativo de Pesos por Capa](experiments/mlp_L10/MLP-10/figs/weight_norm_change_vs_epoch.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-10/figs/weight_norm_change_vs_epoch.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/figs/weight_norm_change_vs_epoch.png)  
+- **Qué muestra el gráfico:** Distancia euclídea normalizada a los pesos iniciales $\|\theta_t - \theta_0\| / \|\theta_0\|$ para la capa 1 y la capa 2.
+- **Significado físico:** Documenta la magnitud de la reorganización sináptica, mostrando que la segunda capa se desplaza con mayor rapidez relativa para amplificar la proyección lineal generada por $h_1$.
+
+![Mapas de Calor Capa vs Checkpoint](experiments/mlp_L10/MLP-10/figs/heatmaps_layer_vs_epoch.png)  
+*Archivo:* [`experiments/mlp_L10/MLP-10/figs/heatmaps_layer_vs_epoch.png`](file:///home/jd/Projects/Ising-ML/experiments/mlp_L10/MLP-10/figs/heatmaps_layer_vs_epoch.png)  
+- **Qué muestra el gráfico:** Mapas de calor 2D que cruzan las capas arquitectónicas contra los checkpoints de entrenamiento para $\phi^{\mathrm{lin}}$, $r_f^{(l)}$, la brecha de accesibilidad $\Delta_l$, y la similitud del kernel tangente.
+- **Significado físico:** Provee una vista panorámica unificada del flujo de aprendizaje de representaciones en el perceptrón multicapa.
+
+---
+
+## 7. Próximas Fases: Especificación Técnica según el Roadmap
 
 ### MLP-11: Batería de Controles, Nulos y Falsabilidad
 - **Objetivo Central:**  
   Someter todos los hallazgos principales a pruebas de estrés para descartar explicaciones espurias o efectos artificiales del diseño experimental.
 - **Protocolos de Control:**  
   1. *Desplazamiento del umbral de decisión:* Entrenar para clasificar con umbrales ficticios a $T=1.5$ o $T=3.0$, confirmando si los picos latentes de $h_1$ siguen la física intrínseca de $T_c$ o la supervisión impuesta.
-  2. *Control de signo fijo vs aleatorizado:* Demostrar formalmente cómo los datos sin balanceo $\mathbb{Z}_2$ conducen al aprendizaje de atajos ilegítimos.
-  3. *Variación de hiperparámetros:* Evaluación en arquitecturas más profundas y anchas ($100 \to 128 \to 64 \to 1$).
+  2. *Regresor continuo de temperatura:* Entrenar una red para predecir $T$ directamente y evaluar si las representaciones replican las mismas propiedades de Fisher.
+  3. *Control de signo fijo vs aleatorizado:* Demostrar formalmente cómo los datos sin balanceo $\mathbb{Z}_2$ conducen al aprendizaje de atajos ilegítimos.
+  4. *Variación de hiperparámetros:* Evaluación en arquitecturas más profundas y anchas ($100 \to 128 \to 64 \to 1$).
 
 ### SYN: Síntesis Global y Criterios de Decisión Go / No-Go
 - **Objetivo Central:**  
@@ -343,9 +464,12 @@ Cada módulo ejecuta un protocolo científico estricto con artefactos reproducib
 
 ---
 
-## 7. Conclusiones Consolidadas de la Campaña
+## 8. Conclusiones Consolidadas de la Campaña
 
 1. **La exactitud de la red en la transición no es defectuosa, es óptima:** Se ha demostrado de forma irrefutable que la caída al ~55% de exactitud en $T_c$ corresponde al límite intrínseco del clasificador bayesiano en volumen finito, descartando la necesidad de optimizaciones heurísticas forzadas en esa región.
 2. **Emergencia de observables físicos sin supervisión:** La red neuronal `SimpleMLP` aprende espontáneamente a ignorar las configuraciones microscópicas directas y proyecta el 96.1% de su varianza funcional sobre la energía escalar del Hamiltoniano.
 3. **Colapso de accesibilidad no lineal en la primera capa:** La simetría $\mathbb{Z}_2$ bloquea estrictamente cualquier lectura lineal sobre la entrada ($\phi^{\text{lin}}_{\text{input}} \equiv 0$). Sin embargo, una sola capa afín con ReLU es suficiente para colapsar la brecha a $\Delta = 0.0$, transformando correlaciones bilineales en representaciones linealmente legibles.
 4. **Respeto Estricto de la Jerarquía de Información (DPI):** Las cotas variacionales confirman que la red retiene el 72.5% de la información térmica y el 95.1% de la información de fase en su primera capa, comprimiendo las dimensiones redundantes hacia un colector de dimensión $r_{\text{eff}} \approx 3.0$ en la criticalidad.
+5. **Alineamiento de Fisher y Dualidad Funcional Paramétrica:** En el espacio tangente, la red entrenada supera categóricamente a todos los controles nulos ($r_f = 0.6908$). Se comprueba la identidad exacta $\nabla_{W_2} f(x) = h_1(x)$, que hace que el alineamiento de la segunda capa ($r_f^{(2)} = 0.8329$) coincida exactamente con la accesibilidad lineal de activaciones ($\phi_{h_1}^{\mathrm{lin}} = 0.8342$).
+6. **Sustituto Cuadrático y Descubrimiento del Hamiltoniano:** El sustituto cuadrático captura más del 96.8% del logit de la red. De esta interacción cuadrática, los primeros vecinos ($r=1$) concentran el 19.33% de la potencia y la energía sola basta para replicar el rendimiento global, mientras que el atajo de la magnetización ($M^2$, $k=0$) solo aporta el 2.07%.
+7. **Dinámica de Aprendizaje Rápida y Bottom-Up:** La emergencia de la representación física de la energía ocurre de forma fulgurante durante la fase rápida ($t \in [0, 3]$ épocas), apareciendo ya en el paso 20 de la época 1 ($t = 0.0286$). En ninguna de las semillas el logit emerge antes que la capa oculta, operando en un régimen de aprendizaje de representaciones genuino (*feature learning*).
