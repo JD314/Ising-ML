@@ -1,0 +1,45 @@
+{
+  "task_id": "MLP-10",
+  "git_hash": "4283e2ded6c34e305568b73cc36cceaf9e2fad11",
+  "n_seeds": 5,
+  "n_checkpoints": 15,
+  "checkpoints": [
+    "epoch0.pt",
+    "epoch1_step1.pt",
+    "epoch1_step5.pt",
+    "epoch1_step20.pt",
+    "epoch1_step50.pt",
+    "epoch1_step200.pt",
+    "epoch1.pt",
+    "epoch2.pt",
+    "epoch3.pt",
+    "epoch5.pt",
+    "epoch8.pt",
+    "epoch13.pt",
+    "epoch21.pt",
+    "epoch34.pt",
+    "epoch55.pt"
+  ],
+  "T_eval_subset": [
+    1.5,
+    2.0,
+    2.2,
+    2.26,
+    2.28,
+    2.3,
+    2.5,
+    3.0
+  ],
+  "T_eval_tc": 2.26,
+  "ns_gram": 1000,
+  "probe_alphas": [
+    0.001,
+    0.01,
+    0.1,
+    1.0,
+    10.0,
+    100.0,
+    1000.0
+  ],
+  "probe_cv_splits": 5
+}

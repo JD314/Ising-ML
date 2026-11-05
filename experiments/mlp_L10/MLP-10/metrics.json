@@ -1,0 +1,69 @@
+{
+  "task_id": "MLP-10",
+  "git_hash": "4283e2ded6c34e305568b73cc36cceaf9e2fad11",
+  "checkpoint_epochs": [
+    "epoch0.pt",
+    "epoch1_step1.pt",
+    "epoch1_step5.pt",
+    "epoch1_step20.pt",
+    "epoch1_step50.pt",
+    "epoch1_step200.pt",
+    "epoch1.pt",
+    "epoch2.pt",
+    "epoch3.pt",
+    "epoch5.pt",
+    "epoch8.pt",
+    "epoch13.pt",
+    "epoch21.pt",
+    "epoch34.pt",
+    "epoch55.pt"
+  ],
+  "n_seeds": 5,
+  "n_seeds_with_t_l_min_over_layers": 5,
+  "learning_order": "simultaneous / joint emergence of hidden layer h1 and logit within intra-epoch resolution",
+  "same_probe_settings_across_checkpoints": true,
+  "lr_and_stop_rule_fixed": true,
+  "emergence_times": {
+    "t_h1_mean": 0.08,
+    "t_h1_std": 0.10285714285714286,
+    "t_h1_by_seed": [
+      0.02857142857142857,
+      0.02857142857142857,
+      0.2857142857142857,
+      0.02857142857142857,
+      0.02857142857142857
+    ],
+    "t_logit_mean": 0.2314285714285714,
+    "t_logit_std": 0.3846440177724895,
+    "t_logit_by_seed": [
+      0.02857142857142857,
+      0.02857142857142857,
+      1.0,
+      0.07142857142857142,
+      0.02857142857142857
+    ],
+    "t_rf1_mean": 0.0,
+    "t_rf2_mean": 0.08
+  },
+  "order_votes": [
+    "simultaneous",
+    "simultaneous",
+    "h1_before_logit",
+    "h1_before_logit",
+    "simultaneous"
+  ],
+  "fast_learning_phase_epochs": [
+    0,
+    3
+  ],
+  "final_checkpoint_metrics_tc": {
+    "phi_lin_h1_mean": 0.8362737078273306,
+    "phi_lin_logit_mean": 0.812462774548694,
+    "r_f_l1_mean": 0.454774232255663,
+    "r_f_l2_mean": 0.8350202149068066,
+    "effective_rank_mean": 22.833085825034225,
+    "outliers_mean": 22.8,
+    "dtheta1_final_mean": 3.85166715818893,
+    "dtheta2_final_mean": 6.560957333427588
+  }
+}

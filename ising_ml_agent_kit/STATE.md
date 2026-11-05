@@ -1,7 +1,7 @@
 # STATE · estado vivo (el agente actualiza este archivo)
 
 **Última actualización:** 2026-11-05  **Agente/persona:** Antigravity (Gemini)  
-**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-10 (dinámica del aprendizaje por capa a través de checkpoints).
+**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-11 (controles y nulos).
 
 ## Tablero
 
@@ -17,7 +17,8 @@
 | MLP-07 | Métricas de información | 06 | 05, 06 | DONE | `experiments/mlp_L10/MLP-07/{evaluate_information.py,config.json,metrics.json,notes.md,figs/}` | Cadena DPI respetada (I(T;h1)=0.701 nats, I(Y;h1)=0.399 nats / 95.1% retenido); rango efectivo comprimido a 3.03 en Tc; 0 neuronas muertas. |
 | MLP-08 | Fisher en parámetros por capa | 07 | 04, 06 | DONE | `experiments/mlp_L10/MLP-08/{evaluate_fisher.py,config.json,metrics.json,notes.md,figs/}` | r_f(Tc)=0.691 supera a los 4 nulos; r_f^(2)=0.833 coincide con phi_h1=0.834; outliers estables en ns con ratio MP 94x y solapamiento 0.763. |
 | MLP-09 | Lado de la entrada | 08 | 04 | DONE | `experiments/mlp_L10/MLP-09/{evaluate_input_side.py,config.json,metrics.json,notes.md,figs/}` | Sustituto cuadrático alcanza R^2=0.968 con 19.3% de potencia en vecinos y solo 2.1% en k=0; ablación energy iguala a full MLP. |
-| MLP-10 | Dinámica de entrenamiento | 09 | 06, 07, 08 | TODO | | |
+| MLP-10 | Dinámica de entrenamiento | 09 | 06, 07, 08 | DONE | `experiments/mlp_L10/MLP-10/{evaluate_dynamics.py,config.json,metrics.json,notes.md,figs/}` | Fase rápida en épocas 0-3; emergencia simultánea/bottom-up (t_h1=0.08 épocas <= t_logit=0.23 épocas en 5/5 semillas); feature learning activo. |
+| MLP-11 | Controles y nulos | 10 | 05–10 | TODO | | |
 | MLP-11 | Controles y nulos | 10 | 05–10 | TODO | | |
 | SYN | Síntesis y decisión go/no-go | 11 | todas | TODO | | |
 
@@ -52,12 +53,23 @@ Estados: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DONE_NEGATIVE` (hech
 | 2026-11-04 | D12 | Sanidad Z2 en entrada verificada estrictamente (phi_lin_input_max_abs = 0.000000 < 0.02) y colapso de brecha de accesibilidad confirmado en h1 (Delta=0.000 a Tc) | Confirma que la primera capa oculta realiza la transformación de representaciones no lineal a legible linealmente para el score térmico. |
 | 2026-11-05 | D13 | Confirmación de r_f entrenado superando a los 4 controles nulos y dualidad funcional grad_{W2} f = h1 | r_f(Tc)=0.691 > max(nulos)=0.616; r_f^(2)=0.8329 concuerda con phi_h1=0.8342 de MLP-06; autovalor dominante estable en ns frente a MP con lambda1/lambda+ = 94. |
 | 2026-11-05 | D14 | Sustituto cuadrático de logit y ablaciones confirman que la red aprende la energía y no el atajo de la magnetización | R^2 cuadrático = 0.9682; potencia en k=0 es solo 2.07% vs 19.33% en vecinos próximos; ablación energy alcanza 87.94% igualando a full MLP (86.32%) mientras k0 colapsa a DeltaCE negativo y menor accuracy. |
+| 2026-11-05 | D15 | Orden de aprendizaje medido como simultáneo a bottom-up (t_h1 <= t_logit en 5/5 semillas) con fase rápida en épocas 0 a 3 | t_h1 medio = 0.08 épocas (paso 20-50); t_logit medio = 0.23 épocas; en ninguna semilla emerge el logit antes que la capa oculta; régimen de feature learning confirmado por cambio del kernel. |
 
 ## Anomalías abiertas
 
 (ninguna)
 
 ## Bitácora de relevo (la entrada más reciente arriba)
+
+```
+### 2026-11-05 · MLP-10 · Antigravity (Gemini)
+Hecho:          Evaluación exhaustiva de la dinámica de aprendizaje a lo largo de 15 checkpoints por semilla en SimpleMLP (5 semillas), incluyendo pasos intra-época (1, 5, 20, 50, 200 de época 1) y épocas 0 a 55. Medición de tiempos de emergencia t_l (primer punto con phi_lin > 0.5 * final): t_h1 = 0.0800 épocas (IC: [0.0286, 0.2857]), t_logit = 0.2314 épocas (IC: [0.0286, 1.0000]). Orden de aprendizaje medido: simultáneo en 3/5 semillas y bottom-up (h1 antes que logit) en 2/5 semillas (en 0/5 semillas emerge el logit antes que h1). Fase rápida de aprendizaje claramente acotada en épocas 0 a 3, donde la pérdida de validación cae bruscamente y la traza de Fisher se expande. Desplazamiento relativo de parámetros ||Delta theta|| / ||theta_0||: 385% en capa 1, 656% en capa 2. Cambio relativo del kernel tangente confirma operación en régimen de feature learning.
+No hecho:       Batería exhaustiva de controles y nulos (shift de umbral, regresor continuo de T, etiquetas barajadas, aumento Z2, ancho y profundidad) (tarea MLP-11).
+Archivos:       experiments/mlp_L10/MLP-10/{evaluate_dynamics.py,config.json,metrics.json,notes.md,figs/}, STATE.md
+Números clave:  checkpoint_epochs = 15; n_seeds_with_t_l_min_over_layers = 5; learning_order = "simultaneous / joint emergence of hidden layer h1 and logit within intra-epoch resolution"; t_h1_mean = 0.0800; t_logit_mean = 0.2314; fast_learning_phase = [0, 3]; final_eff_rank = 22.83.
+Sorpresas:      La extracción de la energía por la capa oculta emerge tan temprano como el paso 20 de la época 1 (t = 0.0286 épocas), apenas 20 batches de 256 muestras, demostrando que la señal de fase proporciona un gradiente inductivo inmediato hacia las correlaciones de corto alcance.
+Siguiente paso: Ejecutar MLP-11 (ising-controls-nulls: suite completa de controles nulos y arquitecturas).
+```
 
 ```
 ### 2026-11-05 · MLP-09 · Antigravity (Gemini)
