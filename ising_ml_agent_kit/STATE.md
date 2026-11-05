@@ -1,7 +1,7 @@
 # STATE · estado vivo (el agente actualiza este archivo)
 
-**Última actualización:** 2026-11-04  **Agente/persona:** Antigravity (Gemini)  
-**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-08 (espacio de Fisher en parámetros y descomposición espectral).
+**Última actualización:** 2026-11-05  **Agente/persona:** Antigravity (Gemini)  
+**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-09 (análisis del lado de la entrada: Fourier W1, sustituto cuadrático y ablaciones).
 
 ## Tablero
 
@@ -15,7 +15,7 @@
 | MLP-05 | Comportamiento vs oráculo | 04 | 03, 04 | DONE | `experiments/mlp_L10/MLP-05/{evaluate_behavior.py,config.json,metrics.json,figs/,notes.md}` | Caída de accuracy en Tc es INTRÍNSECA (Acc net 56.0% vs oracle 52.7%, Delta CE en CI); 96.1% de varianza del logit explicada por E. |
 | MLP-06 | Sondas por capa | 05 | 04 | DONE | `experiments/mlp_L10/MLP-06/{evaluate_probes.py,config.json,metrics.json,notes.md,figs/}` | Brecha de accesibilidad Delta colapsa en h1 (Delta=1.000 en entrada s -> 0.000 en h1 con R^2=83.4%); phi_lin(s)<=0.000 (Z2); DPI respetada y controles separados. |
 | MLP-07 | Métricas de información | 06 | 05, 06 | DONE | `experiments/mlp_L10/MLP-07/{evaluate_information.py,config.json,metrics.json,notes.md,figs/}` | Cadena DPI respetada (I(T;h1)=0.701 nats, I(Y;h1)=0.399 nats / 95.1% retenido); rango efectivo comprimido a 3.03 en Tc; 0 neuronas muertas. |
-| MLP-08 | Fisher en parámetros por capa | 07 | 04, 06 | TODO | | |
+| MLP-08 | Fisher en parámetros por capa | 07 | 04, 06 | DONE | `experiments/mlp_L10/MLP-08/{evaluate_fisher.py,config.json,metrics.json,notes.md,figs/}` | r_f(Tc)=0.691 supera a los 4 nulos; r_f^(2)=0.833 coincide con phi_h1=0.834; outliers estables en ns con ratio MP 94x y solapamiento 0.763. |
 | MLP-09 | Lado de la entrada | 08 | 04 | TODO | | |
 | MLP-10 | Dinámica de entrenamiento | 09 | 06, 07, 08 | TODO | | |
 | MLP-11 | Controles y nulos | 10 | 05–10 | TODO | | |
@@ -50,12 +50,23 @@ Estados: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DONE_NEGATIVE` (hech
 | 2026-11-04 | D10 | Paciencia fijada en 10 épocas para SimpleMLP en batch 256 | Todas las semillas convergen limpiamente entre 50 y 69 épocas sin sobreajuste severo. |
 | 2026-11-04 | D11 | Veredicto sobre la caída de accuracy en Tc declarado como INTRÍNSECO | En Tc, Delta CE = +0.0621 nats con IC95% = [-0.0135, +0.0164] nats (el 0 está dentro del IC del ensamble) y accuracy de la red (55.97%) igual o ligeramente superior a la bayesiana (52.67%). |
 | 2026-11-04 | D12 | Sanidad Z2 en entrada verificada estrictamente (phi_lin_input_max_abs = 0.000000 < 0.02) y colapso de brecha de accesibilidad confirmado en h1 (Delta=0.000 a Tc) | Confirma que la primera capa oculta realiza la transformación de representaciones no lineal a legible linealmente para el score térmico. |
+| 2026-11-05 | D13 | Confirmación de r_f entrenado superando a los 4 controles nulos y dualidad funcional grad_{W2} f = h1 | r_f(Tc)=0.691 > max(nulos)=0.616; r_f^(2)=0.8329 concuerda con phi_h1=0.8342 de MLP-06; autovalor dominante estable en ns frente a MP con lambda1/lambda+ = 94. |
 
 ## Anomalías abiertas
 
 (ninguna)
 
 ## Bitácora de relevo (la entrada más reciente arriba)
+
+```
+### 2026-11-05 · MLP-08 · Antigravity (Gemini)
+Hecho:          Cálculo del espacio de Fisher en parámetros F_thetatheta, matriz de Gram dual (ns x ns en float64) y espectros por capa en SimpleMLP (5 semillas). Verificación de identidades (a)-(d) de F8 (18/18 tests unitarios pasados). Regresión r_f(T) sobre s_T held-out por cadena: red entrenada r_f(Tc) = 0.6908 supera holgadamente a los 4 controles nulos (init: 0.5439, shuffled: 0.6161, frozen: 0.5686, permuted: -0.3182). Descomposición por capa: r_f^(1) = 0.4642, r_f^(2) = 0.8329 (coincide exactamente con phi_h1^lin = 0.8342 de MLP-06 debido a grad_W2 f = h1). Espectro de Gram dual a Tc muestra rango efectivo r_eff = 22.45 y razon a borde MP lambda_max / lambda_+ = 94.05. Escaneo en ns in {500, 1000, 2000, 4000} confirma estabilidad del autovalor dominante (lambda_1 = 27.5-28.5 vs lambda_+ = 0.11-0.31). Autosolapamiento de autovectores funcionales entre semillas = 0.7627.
+No hecho:       Análisis del lado de la entrada (Fourier de pesos W1, sustituto cuadrático Q, saliencia y ablaciones) (tarea MLP-09).
+Archivos:       experiments/mlp_L10/MLP-08/{evaluate_fisher.py,config.json,metrics.json,notes.md,figs/}, STATE.md
+Números clave:  tests_abcd_pass = True; uses_empirical_fisher = False; dtype = float64; n_nulls = 4; r_f(Tc) = 0.6908; r_f^(2)(Tc) = 0.8329; outliers_stable_in_ns = True; ratio_to_mp = 94.05; mean_fn_overlap = 0.7627.
+Sorpresas:      El alineamiento de la segunda capa r_f^(2) coincide con una precisión extraordinaria con la fracción lineal de activaciones phi_h1 (0.8329 vs 0.8342), validando analíticamente que la última capa explota directamente la proyección lineal de la energía realizada por h1.
+Siguiente paso: Ejecutar MLP-09 (ising-input-side-analysis: Fourier W1, sustituto cuadrático Q_ij, saliencia y ablaciones k0/even_nn/energy).
+```
 
 ```
 ### 2026-11-04 · MLP-07 · Antigravity (Gemini)

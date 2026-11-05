@@ -1,0 +1,72 @@
+{
+  "task_id": "MLP-08",
+  "git_hash": "81ec5499224b425bc2bdade670da0a43d3b88011",
+  "n_seeds": 5,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "tests_abcd_pass": true,
+  "uses_empirical_fisher": false,
+  "dtype_fisher": "float64",
+  "n_nulls": 4,
+  "ns_scan_values": [
+    500,
+    1000,
+    2000,
+    4000
+  ],
+  "outliers_stable_in_ns": true,
+  "rf_trained_beats_nulls_Tc": true,
+  "at_Tc": {
+    "T_evaluated": 2.26,
+    "rf_global_mean": 0.690756036825498,
+    "rf_global_std": 0.1467798570918004,
+    "rf_global_ci95": [
+      0.43307151834328833,
+      0.7730813493977075
+    ],
+    "rf_layer1_mean": 0.4642313797629269,
+    "rf_layer2_mean": 0.8328573095627754,
+    "rf_null1_init": 0.5439015646298961,
+    "rf_null2_shuff": 0.616110998373534,
+    "rf_null3_frozen": 0.5686135993931833,
+    "rf_null4_labels": -0.3181877956411243,
+    "trace_global_mean": 65.44394785463136,
+    "trace_layer1_fraction": 0.733845013567121,
+    "trace_layer2_fraction": 0.26615498643287905,
+    "effective_rank_mean": 22.450561404332234,
+    "ratio_to_mp_mean": 94.05211513348888,
+    "eigenvector_self_overlap_fn": 0.7626696135125021
+  },
+  "mixed_T_rf": -10.20252811938138,
+  "outliers_summary": {
+    "500": {
+      "outliers_mean": 17.0,
+      "outliers_std": 2.0,
+      "top_eval_mean": 28.506790353906904,
+      "lambda_plus_mean": 0.31381186536816646
+    },
+    "1000": {
+      "outliers_mean": 23.4,
+      "outliers_std": 4.029888335921977,
+      "top_eval_mean": 27.867161946673395,
+      "lambda_plus_mean": 0.20495978600986828
+    },
+    "2000": {
+      "outliers_mean": 34.2,
+      "outliers_std": 6.046486583132389,
+      "top_eval_mean": 27.614560210867097,
+      "lambda_plus_mean": 0.1437154645888904
+    },
+    "4000": {
+      "outliers_mean": 47.2,
+      "outliers_std": 9.282241108697834,
+      "top_eval_mean": 27.462150355291065,
+      "lambda_plus_mean": 0.10695042287456931
+    }
+  }
+}
