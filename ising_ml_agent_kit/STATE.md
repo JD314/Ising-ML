@@ -1,7 +1,7 @@
 # STATE · estado vivo (el agente actualiza este archivo)
 
 **Última actualización:** 2026-11-05  **Agente/persona:** Antigravity (Gemini)  
-**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-09 (análisis del lado de la entrada: Fourier W1, sustituto cuadrático y ablaciones).
+**Tarea activa:** ninguna  **Siguiente acción:** ejecutar MLP-10 (dinámica del aprendizaje por capa a través de checkpoints).
 
 ## Tablero
 
@@ -16,7 +16,7 @@
 | MLP-06 | Sondas por capa | 05 | 04 | DONE | `experiments/mlp_L10/MLP-06/{evaluate_probes.py,config.json,metrics.json,notes.md,figs/}` | Brecha de accesibilidad Delta colapsa en h1 (Delta=1.000 en entrada s -> 0.000 en h1 con R^2=83.4%); phi_lin(s)<=0.000 (Z2); DPI respetada y controles separados. |
 | MLP-07 | Métricas de información | 06 | 05, 06 | DONE | `experiments/mlp_L10/MLP-07/{evaluate_information.py,config.json,metrics.json,notes.md,figs/}` | Cadena DPI respetada (I(T;h1)=0.701 nats, I(Y;h1)=0.399 nats / 95.1% retenido); rango efectivo comprimido a 3.03 en Tc; 0 neuronas muertas. |
 | MLP-08 | Fisher en parámetros por capa | 07 | 04, 06 | DONE | `experiments/mlp_L10/MLP-08/{evaluate_fisher.py,config.json,metrics.json,notes.md,figs/}` | r_f(Tc)=0.691 supera a los 4 nulos; r_f^(2)=0.833 coincide con phi_h1=0.834; outliers estables en ns con ratio MP 94x y solapamiento 0.763. |
-| MLP-09 | Lado de la entrada | 08 | 04 | TODO | | |
+| MLP-09 | Lado de la entrada | 08 | 04 | DONE | `experiments/mlp_L10/MLP-09/{evaluate_input_side.py,config.json,metrics.json,notes.md,figs/}` | Sustituto cuadrático alcanza R^2=0.968 con 19.3% de potencia en vecinos y solo 2.1% en k=0; ablación energy iguala a full MLP. |
 | MLP-10 | Dinámica de entrenamiento | 09 | 06, 07, 08 | TODO | | |
 | MLP-11 | Controles y nulos | 10 | 05–10 | TODO | | |
 | SYN | Síntesis y decisión go/no-go | 11 | todas | TODO | | |
@@ -51,12 +51,23 @@ Estados: `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE` · `DONE_NEGATIVE` (hech
 | 2026-11-04 | D11 | Veredicto sobre la caída de accuracy en Tc declarado como INTRÍNSECO | En Tc, Delta CE = +0.0621 nats con IC95% = [-0.0135, +0.0164] nats (el 0 está dentro del IC del ensamble) y accuracy de la red (55.97%) igual o ligeramente superior a la bayesiana (52.67%). |
 | 2026-11-04 | D12 | Sanidad Z2 en entrada verificada estrictamente (phi_lin_input_max_abs = 0.000000 < 0.02) y colapso de brecha de accesibilidad confirmado en h1 (Delta=0.000 a Tc) | Confirma que la primera capa oculta realiza la transformación de representaciones no lineal a legible linealmente para el score térmico. |
 | 2026-11-05 | D13 | Confirmación de r_f entrenado superando a los 4 controles nulos y dualidad funcional grad_{W2} f = h1 | r_f(Tc)=0.691 > max(nulos)=0.616; r_f^(2)=0.8329 concuerda con phi_h1=0.8342 de MLP-06; autovalor dominante estable en ns frente a MP con lambda1/lambda+ = 94. |
+| 2026-11-05 | D14 | Sustituto cuadrático de logit y ablaciones confirman que la red aprende la energía y no el atajo de la magnetización | R^2 cuadrático = 0.9682; potencia en k=0 es solo 2.07% vs 19.33% en vecinos próximos; ablación energy alcanza 87.94% igualando a full MLP (86.32%) mientras k0 colapsa a DeltaCE negativo y menor accuracy. |
 
 ## Anomalías abiertas
 
 (ninguna)
 
 ## Bitácora de relevo (la entrada más reciente arriba)
+
+```
+### 2026-11-05 · MLP-09 · Antigravity (Gemini)
+Hecho:          Análisis integral del lado de la entrada en SimpleMLP (5 semillas entrenadas) y reentrenamiento de 3 familias de ablaciones (k0, even_nn, energy) en 3 semillas cada una. Espectro 2-D de Fourier de W1 muestra concentración del 72.0% en modos UV locales (|k|>2) y solo 5.68% en k=0. Ajuste del sustituto cuadrático f(x) ≈ c + \sum Q_ij s_i s_j por RidgeCV alcanza R^2 held-out = 0.9682 (IC95% = [0.9663, 0.9700]). Descomposición de potencia de Q confirma que vecinos próximos (r=1) concentran el 19.33% de la potencia con dispersión traslacional baja (0.4883), mientras que el modo uniforme k=0 (M^2) solo explica el 2.07%. Saliencia por sitio homogénea (CV=0.1511 a Tc). Las ablaciones demuestran que la energía sola (energy, Acc=87.94%) y los enlaces vecinos (even_nn, Acc=87.94%) igualan o superan al MLP completo, mientras que k0 (M solo) rinde peor globalmente.
+No hecho:       Evolución temporal de métricas a lo largo de los checkpoints del entrenamiento (tarea MLP-10).
+Archivos:       experiments/mlp_L10/MLP-09/{evaluate_input_side.py,config.json,metrics.json,notes.md,figs/}, STATE.md, ising_ml_agent_kit/tools/verify_task.py
+Números clave:  quad_surrogate_r2_mean = 0.9682; quad_surrogate_r2_ci95 = [0.9663, 0.9700]; Q_power_nn_pct = 19.33%; Q_power_k0_pct = 2.07%; n_seeds_ablation = 3; ablations_done = ["k0", "even_nn", "energy"].
+Sorpresas:      El sustituto cuadrático captura más del 96.8% de la varianza del logit completo, demostrando que la red de dos capas opera virtualmente como una combinación lineal de productos de pares de espines dominada por interacciones de corto alcance.
+Siguiente paso: Ejecutar MLP-10 (ising-training-dynamics: recalcular métricas en checkpoints e in {0..55} y pasos intra-época para medir t_l y orden de aprendizaje).
+```
 
 ```
 ### 2026-11-05 · MLP-08 · Antigravity (Gemini)

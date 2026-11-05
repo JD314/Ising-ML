@@ -140,6 +140,47 @@ TASK_SPECS = {
             and len(m.get("ns_scan_values", [])) >= 4
         ),
     },
+    "MLP-09": {
+        "description": "Input side analysis (Fourier, quadratic surrogate, ablations)",
+        "dir": "experiments/mlp_L10/MLP-09",
+        "required_files": ["config.json", "metrics.json", "notes.md"],
+        "required_keys": [
+            "quad_surrogate_r2_mean",
+            "quad_surrogate_r2_ci95",
+            "Q_power_nn_pct",
+            "Q_power_k0_pct",
+            "ablations_done",
+            "n_seeds_ablation",
+        ],
+        "criteria": lambda m: (
+            0.0 <= m.get("quad_surrogate_r2_mean", -1.0) <= 1.0
+            and len(m.get("quad_surrogate_r2_ci95", [])) == 2
+            and m["quad_surrogate_r2_ci95"][0] <= m["quad_surrogate_r2_ci95"][1]
+            and 0.0 <= m.get("Q_power_nn_pct", -1.0) <= 100.0
+            and 0.0 <= m.get("Q_power_k0_pct", -1.0) <= 100.0
+            and set(m.get("ablations_done", [])) >= {"k0", "even_nn", "energy"}
+            and m.get("n_seeds_ablation", 0) >= 3
+        ),
+    },
+    "MLP-10": {
+        "description": "Training dynamics per layer across checkpoints",
+        "dir": "experiments/mlp_L10/MLP-10",
+        "required_files": ["config.json", "metrics.json", "notes.md"],
+        "required_keys": [
+            "checkpoint_epochs",
+            "n_seeds_with_t_l_min_over_layers",
+            "learning_order",
+            "same_probe_settings_across_checkpoints",
+            "lr_and_stop_rule_fixed",
+        ],
+        "criteria": lambda m: (
+            len(m.get("checkpoint_epochs", [])) >= 10
+            and m.get("n_seeds_with_t_l_min_over_layers", 0) >= 4
+            and isinstance(m.get("learning_order"), str)
+            and m.get("same_probe_settings_across_checkpoints") is True
+            and m.get("lr_and_stop_rule_fixed") is True
+        ),
+    },
 }
 
 

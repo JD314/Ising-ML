@@ -1,0 +1,16 @@
+{
+  "task_id": "MLP-09",
+  "git_hash": "d59f44267ded14f685e73f3937d3229854dc69b6",
+  "data_path": "data/L10_data_audit.h5",
+  "n_seeds_trained": 5,
+  "n_seeds_ablation": 3,
+  "ablation_modes": [
+    "k0",
+    "even_nn",
+    "energy"
+  ],
+  "surrogate_alpha": 100.0,
+  "surrogate_n_pairs": 4950,
+  "grid_T_points": 64,
+  "T_eval": 2.26
+}
